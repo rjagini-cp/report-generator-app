@@ -174,6 +174,193 @@ CLEARED_PRODUCTS = [
     'Total Ankle Replacement',
 ]
 
+# ══════════════════════════════════════════════════════════════
+# Ported from r3id_app.py — design-time lookups needed by
+# /analytics/process-efficiency and /analytics/process-efficiency/exclusions.
+# ══════════════════════════════════════════════════════════════
+
+TAR_PRODUCTS = ['Total Ankle Replacement', 'PSR']
+
+RTSA_PRODUCTS = [
+    'Reverse Total Shoulder Arthroplasty',
+    'Reverse Shoulder Arthroplasty - Glenosphere Only',
+    'Reverse Shoulder Arthroplasty - Glenoid Baseplate',
+]
+
+SCAN_TIMES = {
+    'Corrective Osteotomy Hand/Wrist':7,'Hemiarthroplasty Hand/Wrist':7,'Carpal Replacement':7,
+    'Total Wrist Arthroplasty':7,'Hand/Wrist Fusion':7,'Total Elbow Arthroplasty':7,
+    'Hemiarthroplasty Elbow':7,'Elbow Fusion':7,'Clavicle':7,'Hemiarthroplasty Shoulder':7,
+    'Acromion':7,'Anatomic Shoulder Arthroplasty':7,'Reverse Total Shoulder Arthroplasty':7,
+    'Reverse Shoulder Arthroplasty - Glenosphere Only':7,'Reverse Shoulder Arthroplasty - Glenoid Baseplate':7,
+    'Reverse Shoulder Arthroplasty - Proximal Humerus':7,'Shoulder':7,
+    'Hemiarthroplasty Knee':7,'Total Knee Arthroplasty':7,'TKA':7,
+    'Mandible':7,'Maxilla':7,'General Reconstruction':7,
+    'Corrective Osteotomy Foot':15,'Bone Models - Foot':15,'Midfoot':15,'MPJ/MTP':15,'Hindfoot Fusion':15,
+    'Corrective Osteotomy Ankle':15,'Bone Models - Ankle':15,'Ankle Fusion':15,'Antibiotic Spacer':15,
+    'Hemiarthroplasty Ankle':15,'Hemitalus':15,'Unknown - Foot/Ankle':15,
+    'Total Ankle Replacement':15,'Total Talus and Other Arthroplasty':15,'PSR':15,
+    'Bone Models - Arm':7,'Prosthetic - Arm':7,'Segmental Defect - Arm':7,'Corrective Osteotomy - Arm':7,
+    'Prosthetic - Leg':7,'Corrective Osteotomy - Leg':7,'Segmental Defect - Leg':7,
+    'Corrective Osteotomy':7,'Prosthetic':7,'Segmental Defect':7,
+    'Hip Hemipelvis':7,'Hip Arthroplasty':7,'Hip Hemiarthroplasty':7,
+}
+
+SEG_TIMES = {
+    'Corrective Osteotomy Hand/Wrist':(240,20),'Hemiarthroplasty Hand/Wrist':(240,20),'Carpal Replacement':(240,20),
+    'Total Wrist Arthroplasty':(240,20),'Hand/Wrist Fusion':(240,20),'Total Elbow Arthroplasty':(240,20),
+    'Hemiarthroplasty Elbow':(240,20),'Elbow Fusion':(300,20),'Clavicle':(120,20),
+    'Hemiarthroplasty Shoulder':(150,30),'Acromion':(150,30),'Anatomic Shoulder Arthroplasty':(150,30),
+    'Reverse Total Shoulder Arthroplasty':(150,30),'Reverse Shoulder Arthroplasty - Glenosphere Only':(150,30),
+    'Reverse Shoulder Arthroplasty - Glenoid Baseplate':(150,30),'Reverse Shoulder Arthroplasty - Proximal Humerus':(150,30),
+    'Shoulder':(150,30),'Hemiarthroplasty Knee':(120,20),'Total Knee Arthroplasty':(120,20),'TKA':(120,20),
+    'Mandible':(200,20),'Maxilla':(200,20),'General Reconstruction':(200,20),
+    'Corrective Osteotomy Foot':(200,20),'Bone Models - Foot':(200,20),'Midfoot':(200,20),'MPJ/MTP':(200,20),
+    'Hindfoot Fusion':(200,20),'Corrective Osteotomy Ankle':(200,20),'Bone Models - Ankle':(200,20),
+    'Ankle Fusion':(200,20),'Antibiotic Spacer':(200,20),'Hemiarthroplasty Ankle':(200,20),
+    'Hemitalus':(200,20),'Unknown - Foot/Ankle':(200,20),'Total Ankle Replacement':(150,30),
+    'Total Talus and Other Arthroplasty':(150,20),'PSR':(150,30),
+    'Bone Models - Arm':(200,20),'Prosthetic - Arm':(200,20),'Segmental Defect - Arm':(200,20),
+    'Corrective Osteotomy - Arm':(200,20),'Prosthetic - Leg':(120,20),'Corrective Osteotomy - Leg':(120,20),
+    'Segmental Defect - Leg':(120,20),'Corrective Osteotomy':(120,20),'Prosthetic':(120,20),
+    'Segmental Defect':(120,20),'Hip Hemipelvis':(120,20),'Hip Arthroplasty':(120,20),'Hip Hemiarthroplasty':(120,20),
+}
+
+STEP_TIMES = {
+    'Planning':     {'TAR':(150,60), 'rTSA':(330,60)},
+    'Design':       {'TAR':(150,60), 'rTSA':(240,60)},
+    'Jigs Design':  {'rTSA':(240,60)},  # Alias — same as Design for rTSA
+    'Peer Review':  {'TAR':(180,60)},   # Worker=180 min, Reviewer=60 min (from PSR pbit)
+    'Proposed Surgical Plan': {'TAR':(90,30), 'rTSA':(120,30)},
+    'Shipping':     {'TAR':(180,60)},  # Bone Model — TAR only
+}
+
+MINUTES_PER_DAY = 480
+
+def get_product_group(product):
+    """Map a case_category_name to a product group for design time lookup.
+    (Only used by the fallback path now — see get_design_time().)"""
+    if product in TAR_PRODUCTS:
+        return 'TAR'
+    if product in RTSA_PRODUCTS:
+        return 'rTSA'
+    return None
+
+DATABASE_INDEX_DESIGN_TIMES_GID = "1507030841"
+
+_design_times_cache = {"data": None, "fetched_at": None}
+
+_DESIGN_TIMES_CACHE_TTL_SECONDS = 600  # 10 minutes
+
+def get_design_times_live(force_refresh=False):
+    """Fetches the live 'Design Times' tab and returns
+    {(product, step_name): (design_min, review_min_or_None)}.
+    Only System == 'BigQuery' rows are used here — Camstar design times (once
+    added to this same tab) are a separate lookup path, not wired up yet.
+    Cached in memory for _DESIGN_TIMES_CACHE_TTL_SECONDS."""
+    now = datetime.datetime.utcnow()
+    cached = _design_times_cache["data"]
+    fetched_at = _design_times_cache["fetched_at"]
+    if (not force_refresh and cached is not None and fetched_at is not None
+            and (now - fetched_at).total_seconds() < _DESIGN_TIMES_CACHE_TTL_SECONDS):
+        return cached
+
+    csv_url = (f"https://docs.google.com/spreadsheets/d/{DATABASE_INDEX_SHEET_ID}"
+               f"/export?format=csv&gid={DATABASE_INDEX_DESIGN_TIMES_GID}")
+    try:
+        df = pd.read_csv(csv_url)
+    except Exception as e:
+        logger.error(f"Failed to fetch Design Times sheet: {e}")
+        return cached  # None triggers the hardcoded fallback in get_design_time()
+
+    df.columns = [str(c).strip() for c in df.columns]
+    result = {}
+    for _, row in df.iterrows():
+        system = str(row.get("System", "")).strip()
+        if system != "BigQuery":
+            continue
+        product = str(row.get("Product (case_category_name)", "")).strip()
+        step = str(row.get("Process/Step", "")).strip()
+        if not product or not step or product.lower() == 'nan' or step.lower() == 'nan':
+            continue
+        design_val = row.get("Design", None)
+        review_val = row.get("Review", None)
+        design_min = float(design_val) if pd.notna(design_val) else None
+        review_min = float(review_val) if pd.notna(review_val) else None
+        result[(product, step)] = (design_min, review_min)
+
+    _design_times_cache["data"] = result
+    _design_times_cache["fetched_at"] = now
+    return result
+
+@app.route("/analytics/design-times", methods=["GET"])
+def design_times_debug():
+    """Debug/inspection endpoint — shows the live-loaded design times."""
+    try:
+        force_refresh = request.args.get("refresh", "").lower() == "true"
+        live = get_design_times_live(force_refresh=force_refresh)
+        if live is None:
+            return jsonify({"error": "Live sheet unavailable, using hardcoded fallback", "live": False})
+        return jsonify({"live": True, "count": len(live),
+                         "data": {f"{p} | {s}": {"design": d, "review": r} for (p, s), (d, r) in live.items()}})
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+def get_design_time(step_name, user_type, product, multiplier=1):
+    """Return standard design time in minutes for a step+role+product combo, or None.
+    `multiplier` (1, 2, or 4) is applied ONLY to Scan Assessment and Segmentation —
+    both WORKER and REVIEWER minutes — per the bilateral/revision case-complexity rule.
+    Planning/Design/PSP/Peer Review/Shipping are unaffected.
+
+    Reads live from the Design Times sheet first; falls back to the hardcoded
+    SCAN_TIMES/SEG_TIMES/STEP_TIMES dicts only if the live sheet is unreachable.
+    """
+    live = get_design_times_live()
+    if live is not None:
+        design_min, review_min = live.get((product, step_name), (None, None))
+        base = design_min if user_type == 'WORKER' else review_min
+        if base is None:
+            return None
+        if step_name in ('Scan Assessment', 'Segmentation'):
+            return base * multiplier
+        return base
+
+    # ── Fallback path (live sheet unreachable) ──
+    if step_name == 'Scan Assessment':
+        base = SCAN_TIMES.get(product) if user_type == 'WORKER' else None
+        return base * multiplier if base is not None else None
+    if step_name == 'Segmentation':
+        times = SEG_TIMES.get(product)
+        if times:
+            base = times[0] if user_type == 'WORKER' else times[1]
+            return base * multiplier
+        return None
+    if step_name in STEP_TIMES:
+        pg = get_product_group(product)
+        if pg and pg in STEP_TIMES[step_name]:
+            times = STEP_TIMES[step_name][pg]
+            return times[0] if user_type == 'WORKER' else times[1]
+    return None
+
+def get_case_time_multiplier(laterality, preoperative_state, proposed_indication, design_notes):
+    """Bilateral case -> 2x, revision case -> 2x, both -> 4x, neither -> 1x.
+    Revision = preoperativeState == 'REVISION_OTHER_SYSTEM' OR the word "revision"
+    appears in proposedIndication or designNotes (case-insensitive).
+    Applies to all BigQuery case types (not Camstar — this data doesn't exist there).
+    """
+    is_bilateral = (laterality or '').strip().upper() == 'BILATERAL'
+    is_revision = (
+        (preoperative_state or '') == 'REVISION_OTHER_SYSTEM'
+        or 'revision' in (proposed_indication or '').lower()
+        or 'revision' in (design_notes or '').lower()
+    )
+    m = 1
+    if is_bilateral:
+        m *= 2
+    if is_revision:
+        m *= 2
+    return m
+
 PRODUCT_STEPS = {
     'Reverse Total Shoulder Arthroplasty': [
         'Scan Assessment', 'Segmentation', 'Design Call Prep', 'Planning',
@@ -1698,6 +1885,11 @@ def report_volume():
     Counts cases where effective_psp_date (earliest of PSP REVIEWER, Peer Review REVIEWER,
     ship_wrk_comp_date) falls in the date range. Implicit-PSP rule applied so cases
     that skipped PSP review but completed downstream still count.
+
+    date_field=first_scan_upload_date switches to the Submitted milestone instead —
+    same raw-Case-table population as /analytics/trends (metric=volume,
+    date_field=first_scan_upload_date), so the chart total and this drill-down
+    always match (both include COMPLETED-phase cases, unlike vw_fact_case).
     """
     try:
         args = request.args
@@ -1708,6 +1900,8 @@ def report_volume():
         case_type = args.get('case_type', '').strip()
         surgeon   = args.get('surgeon', '').strip()
         fetch_cases = args.get('fetch_cases') == 'true'
+        date_field  = args.get('date_field', '').strip()
+        use_scan_upload = date_field == 'first_scan_upload_date'
 
         # Include cancelled cases — PSP completion is the milestone; post-PSP cancellation should not affect volume
         case_conds = ["f.deleted = false"]
@@ -1732,28 +1926,49 @@ def report_volume():
 
         if date_from: validate_date(date_from)
         if date_to:   validate_date(date_to)
-        date_from_clause = f"AND effective_psp_date >= '{date_from}'" if date_from else ""
-        date_to_clause   = f"AND effective_psp_date <= '{date_to}'"   if date_to   else ""
 
-        query = f"""
-        WITH {signoff_cte()},
-        case_dates AS (
-            SELECT
-                f.id AS caseId,
-                CAST(sd.first_psp_review_date AS DATETIME) AS effective_psp_date
-            FROM {tbl('Case')} f
-            JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
-            LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
-            LEFT JOIN signoff_dates sd ON f.id = sd.caseId
-            WHERE {case_where}
-              AND sd.first_psp_review_date IS NOT NULL
-        )
-        SELECT caseId
-        FROM case_dates
-        WHERE 1=1
-          {f"AND effective_psp_date >= CAST('{date_from}' AS DATETIME)" if date_from else ""}
-          {f"AND effective_psp_date <= CAST('{date_to} 23:59:59' AS DATETIME)" if date_to else ""}
-        """
+        if use_scan_upload:
+            # Submitted milestone — mirrors /analytics/trends exactly: no PSP-not-null
+            # requirement, date field is s.first_scan_upload_date from vw_lkup_stage_log_dates.
+            query = f"""
+            WITH {signoff_cte()},
+            case_dates AS (
+                SELECT
+                    f.id AS caseId,
+                    s.first_scan_upload_date AS milestone_date
+                FROM {tbl('Case')} f
+                JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+                LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
+                LEFT JOIN signoff_dates sd ON f.id = sd.caseId
+                LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON f.id = s.caseId
+                WHERE {case_where}
+            )
+            SELECT caseId
+            FROM case_dates
+            WHERE 1=1
+              {f"AND DATE(milestone_date) >= '{date_from}'" if date_from else ""}
+              {f"AND DATE(milestone_date) <= '{date_to}'" if date_to else ""}
+            """
+        else:
+            query = f"""
+            WITH {signoff_cte()},
+            case_dates AS (
+                SELECT
+                    f.id AS caseId,
+                    CAST(sd.first_psp_review_date AS DATETIME) AS effective_psp_date
+                FROM {tbl('Case')} f
+                JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+                LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
+                LEFT JOIN signoff_dates sd ON f.id = sd.caseId
+                WHERE {case_where}
+                  AND sd.first_psp_review_date IS NOT NULL
+            )
+            SELECT caseId
+            FROM case_dates
+            WHERE 1=1
+              {f"AND effective_psp_date >= CAST('{date_from}' AS DATETIME)" if date_from else ""}
+              {f"AND effective_psp_date <= CAST('{date_to} 23:59:59' AS DATETIME)" if date_to else ""}
+            """
         df = client.query(query).to_dataframe()
         case_ids = df['caseId'].tolist() if fetch_cases else []
 
@@ -2452,6 +2667,420 @@ def analytics_trends():
                 except: data.append(0)
             datasets.append({'label': shorten_product(product), 'full_label': product, 'data': data, 'color': colors[i % len(colors)]})
         return jsonify({'periods': periods, 'datasets': datasets, 'metric': metric, 'granularity': granularity})
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+
+
+# ══════════════════════════════════════════════════════════════
+# Ported from r3id_app.py — Process Efficiency by Step + Exclusion Breakdown by Engineer
+# ══════════════════════════════════════════════════════════════
+
+_EFF_STEPS   = ['Scan Assessment','Segmentation','Jigs Design','Planning','Design','Proposed Surgical Plan']
+_EFF_MIN_SEC_SCAN = 120   # 2 min floor for Scan Assessment
+_EFF_MIN_SEC      = 600   # 10 min floor for all other steps
+_EFF_MAX_SEC = 28800
+_EFF_LOOKBACK = 30
+
+def _eff_case_where(args):
+    product_filter = args.get('product','').strip()
+    product_group  = args.get('product_group','').strip()
+    conds = ["f.deleted = false","f.canceled = false"]
+    if product_filter:
+        prods = [p.strip() for p in product_filter.split(',')]
+        joined = "','".join(prods)
+        conds.append("cc.name IN ('" + joined + "')")
+    elif product_group:
+        all_prods = []
+        for g in [g.strip() for g in product_group.split(',')]:
+            all_prods.extend(PRODUCT_GROUPS.get(g,[]))
+        if all_prods:
+            joined = "','".join(all_prods)
+            conds.append("cc.name IN ('" + joined + "')")
+    else:
+        conds.append("cc.name IN ('Reverse Total Shoulder Arthroplasty','Total Ankle Replacement')")
+    return " AND ".join(conds)
+
+def _eff_date_filter(args, ts_expr):
+    date_from = args.get('date_from','').strip()
+    date_to   = args.get('date_to','').strip()
+    parts = []
+    if date_from:
+        validate_date(date_from)
+        parts.append(f"DATE({ts_expr}) >= '{date_from}'")
+    if date_to:
+        validate_date(date_to)
+        parts.append(f"DATE({ts_expr}) <= '{date_to}'")
+    return ("AND " + " AND ".join(parts)) if parts else ""
+
+def _eff_valid_steps(args):
+    step_filter = args.get('step','').strip()
+    if step_filter:
+        steps = [s.strip() for s in step_filter.split(',')]
+        return [s for s in steps if s in _EFF_STEPS] or _EFF_STEPS
+    return _EFF_STEPS
+
+def _eff_core_query(args):
+    """Returns the core classified CTE as a SQL string."""
+    case_where  = _eff_case_where(args)
+    valid_steps = _eff_valid_steps(args)
+    steps_sql   = "','".join(valid_steps)
+    ist_sig     = "TIMESTAMP_ADD(sig.createdAt, INTERVAL 330 MINUTE)"
+    date_filter = _eff_date_filter(args, ist_sig)
+
+    # User filter — step_user contains full names matching User table nameFirst + nameLast
+    user_filter = args.get('step_user','').strip()
+    if user_filter:
+        users = [u.strip() for u in user_filter.split(',')]
+        joined_users = "','".join(users)
+        user_having = "AND TRIM(CONCAT(COALESCE(u.nameFirst,''),' ',COALESCE(u.nameLast,''))) IN ('" + joined_users + "')"
+    else:
+        user_having = ""
+
+    return f"""
+    cases AS (
+      SELECT f.id AS caseId, cc.name AS product,
+             f.laterality AS laterality, c2.preoperativeState AS preoperativeState,
+             f.proposedIndication AS proposedIndication, f.designNotes AS designNotes
+      FROM {tbl('vw_fact_case')} f
+      JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+      LEFT JOIN {tbl('Case')} c2 ON f.id = c2.id
+      WHERE {case_where}
+    ),
+    -- All passes for Planning TAR with actual seconds pre-computed
+    planning_tar_passes AS (
+      SELECT
+        sig.refId AS caseId, sig.userId, sig.createdAt AS end_time,
+        'Planning' AS step_name, c_filter.product AS product,
+        c_filter.laterality AS laterality, c_filter.preoperativeState AS preoperativeState,
+        c_filter.proposedIndication AS proposedIndication, c_filter.designNotes AS designNotes,
+        TIMESTAMP_DIFF(sig.createdAt,
+          MAX(asn.createdAt) OVER (
+            PARTITION BY sig.refId, sig.userId
+            ORDER BY sig.createdAt
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+          ), SECOND
+        ) AS actual_sec_raw
+      FROM {_LOG} sig
+      INNER JOIN cases c_filter ON sig.refId = c_filter.caseId
+      LEFT JOIN {_LOG} asn
+        ON asn.refId = sig.refId
+        AND asn.userId = sig.userId
+        AND asn.type = 'r3idCaseRoleAssignmentUpdate'
+        AND asn.createdAt <= sig.createdAt
+        AND asn.createdAt >= TIMESTAMP_SUB(sig.createdAt, INTERVAL {_EFF_LOOKBACK} DAY)
+      WHERE sig.type = 'r3idWorkModuleSignoff-Planning-WORKER-ACCEPT'
+        AND c_filter.product = 'Total Ankle Replacement'
+        {date_filter}
+    ),
+    -- For each case+user: pick the pass closest to standard (150 min = 9000 sec)
+    -- On tie, pick the slower one (higher actual_sec)
+    planning_tar_best AS (
+      SELECT *
+      FROM (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY caseId, userId
+            ORDER BY
+              ABS(actual_sec_raw - 9000) ASC,  -- closest to 150 min
+              actual_sec_raw DESC               -- on tie, slower
+          ) AS rn
+        FROM planning_tar_passes
+        WHERE actual_sec_raw IS NOT NULL
+      )
+      WHERE rn = 1
+        -- Only include if within 50%-150% of standard (75-225 min = 4500-13500 sec)
+        AND actual_sec_raw BETWEEN 4500 AND 18000
+    ),
+    signoffs_raw AS (
+      SELECT
+        sig.refId AS caseId, sig.userId, sig.createdAt AS end_time,
+        REGEXP_EXTRACT(sig.type,
+          r'r3idWorkModuleSignoff-(.+)-(?:WORKER|REVIEWER|APPROVER)-ACCEPT'
+        ) AS step_name,
+        ROW_NUMBER() OVER (
+          PARTITION BY sig.refId,
+            REGEXP_EXTRACT(sig.type,
+              r'r3idWorkModuleSignoff-(.+)-(?:WORKER|REVIEWER|APPROVER)-ACCEPT'
+            )
+          ORDER BY sig.createdAt DESC
+        ) AS rn
+      FROM {_LOG} sig
+      INNER JOIN cases c_filter ON sig.refId = c_filter.caseId
+      WHERE sig.type LIKE 'r3idWorkModuleSignoff-%-WORKER-ACCEPT'
+        AND sig.type != 'r3idWorkModuleSignoff-Planning-WORKER-ACCEPT'
+        {date_filter}
+    ),
+    signoffs AS (
+      SELECT signoffs_raw.caseId, signoffs_raw.userId, signoffs_raw.end_time,
+             signoffs_raw.step_name, c_filter2.product,
+             c_filter2.laterality, c_filter2.preoperativeState,
+             c_filter2.proposedIndication, c_filter2.designNotes
+      FROM signoffs_raw
+      JOIN cases c_filter2 ON signoffs_raw.caseId = c_filter2.caseId
+      WHERE signoffs_raw.rn = 1 AND signoffs_raw.step_name IN ('{steps_sql}')
+      UNION ALL
+      -- Add Planning TAR best passes (already filtered to qualified range)
+      SELECT caseId, userId, end_time, step_name, product,
+             laterality, preoperativeState, proposedIndication, designNotes
+      FROM planning_tar_best
+      WHERE 'Planning' IN ('{steps_sql}')
+    ),
+    paired AS (
+      SELECT
+        s.caseId, s.userId, s.step_name, s.end_time, s.product,
+        s.laterality, s.preoperativeState, s.proposedIndication, s.designNotes,
+        MAX(asn.createdAt) AS start_time
+      FROM signoffs s
+      LEFT JOIN {_LOG} asn
+        ON asn.refId = s.caseId
+        AND asn.userId = s.userId
+        AND asn.type = 'r3idCaseRoleAssignmentUpdate'
+        AND asn.createdAt <= s.end_time
+        AND asn.createdAt >= TIMESTAMP_SUB(s.end_time, INTERVAL {_EFF_LOOKBACK} DAY)
+      GROUP BY s.caseId, s.userId, s.step_name, s.end_time, s.product,
+               s.laterality, s.preoperativeState, s.proposedIndication, s.designNotes
+    ),
+    classified AS (
+      SELECT
+        p.caseId, p.userId, p.step_name, p.end_time, p.product,
+        p.laterality, p.preoperativeState, p.proposedIndication, p.designNotes,
+        TRIM(CONCAT(COALESCE(u.nameFirst,''),' ',COALESCE(u.nameLast,''))) AS worker_name,
+        CASE
+          -- Planning TAR: already validated in planning_tar_best, always valid
+          WHEN p.step_name = 'Planning' AND p.product = 'Total Ankle Replacement'
+            THEN 'valid'
+          WHEN p.start_time IS NULL THEN 'no_pair'
+          WHEN p.step_name = 'Scan Assessment'
+               AND TIMESTAMP_DIFF(p.end_time, p.start_time, SECOND) < {_EFF_MIN_SEC_SCAN} THEN 'click_through'
+          WHEN p.step_name != 'Scan Assessment'
+               AND TIMESTAMP_DIFF(p.end_time, p.start_time, SECOND) < {_EFF_MIN_SEC} THEN 'click_through'
+          WHEN TIMESTAMP_DIFF(p.end_time, p.start_time, SECOND) > {_EFF_MAX_SEC} THEN 'over_standard'
+          ELSE 'valid'
+        END AS pair_status,
+        CASE
+          -- Planning TAR: use pre-computed actual_sec from planning_tar_best
+          WHEN p.step_name = 'Planning' AND p.product = 'Total Ankle Replacement'
+            THEN pt.actual_sec_raw
+          ELSE TIMESTAMP_DIFF(p.end_time, p.start_time, SECOND)
+        END AS actual_sec
+      FROM paired p
+      LEFT JOIN {tbl('User')} u ON p.userId = u.id
+      LEFT JOIN planning_tar_best pt
+        ON pt.caseId = p.caseId AND pt.userId = p.userId
+      WHERE 1=1 {user_having}
+    )"""
+
+@app.route("/analytics/process-efficiency", methods=["GET"])
+def process_efficiency():
+    """Process efficiency: standard_time / actual_time * 100%.
+    Workers only. Last signoff per (caseId, step). Excludes <2min and >8hr pairs.
+    """
+    try:
+        args = request.args
+        granularity = args.get('granularity','daily')
+        ist_sig = "TIMESTAMP_ADD(end_time, INTERVAL 330 MINUTE)"
+        if granularity == 'daily':
+            period_expr = f"DATE({ist_sig})"
+        elif granularity == 'monthly':
+            period_expr = f"FORMAT_DATE('%Y-%m', {ist_sig})"
+        else:
+            period_expr = f"FORMAT_DATE('%G-W%V', {ist_sig})"
+
+        core = _eff_core_query(args)
+        query = f"""
+        WITH {core},
+        valid_only AS (
+          SELECT *, {period_expr} AS period
+          FROM classified WHERE pair_status = 'valid'
+        )
+        SELECT
+          worker_name, step_name, product, period, caseId,
+          laterality, preoperativeState, proposedIndication, designNotes,
+          actual_sec / 60.0 AS actual_min
+        FROM valid_only
+        ORDER BY worker_name, step_name, period
+        """
+
+        df = client.query(query).to_dataframe()
+        if df.empty:
+            return jsonify({"users":[],"team_avg":0,"granularity":granularity,"periods":[]})
+
+        # Bilateral/revision multiplier computed per case (not per aggregated group —
+        # a worker/step/period bucket can contain a mix of bilateral and non-bilateral
+        # cases, so the multiplier has to be applied before any averaging happens).
+        df['time_multiplier'] = df.apply(
+            lambda r: get_case_time_multiplier(
+                r['laterality'], r['preoperativeState'], r['proposedIndication'], r['designNotes']
+            ), axis=1
+        )
+        df['standard_min'] = df.apply(
+            lambda r: get_design_time(r['step_name'], 'WORKER', r['product'], r['time_multiplier']) or 0, axis=1
+        )
+        df_valid = df[df['standard_min'] > 0].copy()
+        df_valid['eff'] = df_valid['standard_min'] / df_valid['actual_min'] * 100
+        # Exclude rows where efficiency > 200% of what's expected — the cap itself
+        # scales with the same bilateral/revision multiplier as standard_min, so a
+        # doubled-standard case isn't unfairly capped at the same flat threshold.
+        df_valid = df_valid[df_valid['eff'] <= 200.0 * df_valid['time_multiplier']]
+
+        # Per-user weighted efficiency (each row is now one case, so this is a
+        # straight sum of standard vs actual minutes across all its cases)
+        user_eff = df_valid.groupby('worker_name').apply(
+            lambda g: round(g['standard_min'].sum() / g['actual_min'].sum() * 100, 1)
+        ).reset_index()
+        user_eff.columns = ['userId','efficiency']
+        user_eff = user_eff.sort_values('efficiency', ascending=False)
+
+        total_std = df_valid['standard_min'].sum()
+        total_act = df_valid['actual_min'].sum()
+        team_avg  = round(total_std / total_act * 100, 1) if total_act > 0 else 0
+
+        periods_sorted = sorted(df_valid['period'].unique().tolist())
+        period_data = []
+        for p in periods_sorted:
+            p_df = df_valid[df_valid['period'] == str(p)]
+            p_std = p_df['standard_min'].sum()
+            p_act = p_df['actual_min'].sum()
+            period_data.append({'period': str(p), 'efficiency': round(p_std/p_act*100,1) if p_act>0 else 0})
+
+        return jsonify({
+            "users": [{'userId':r['userId'],'efficiency':float(r['efficiency'])} for _,r in user_eff.iterrows()],
+            "team_avg": team_avg,
+            "granularity": granularity,
+            "periods": period_data
+        })
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+@app.route("/analytics/process-efficiency/exclusions", methods=["GET"])
+def process_efficiency_exclusions():
+    """Counts of excluded signoffs by reason, grouped by user and step.
+    All cases appear in either efficiency chart or here.
+    Planning TAR cases with no qualifying pass shown as out_of_range.
+    """
+    try:
+        args = request.args
+        case_where  = _eff_case_where(args)
+        valid_steps = _eff_valid_steps(args)
+        steps_sql   = "\',\'".join(valid_steps)
+        ist_sig     = "TIMESTAMP_ADD(sig.createdAt, INTERVAL 330 MINUTE)"
+        date_filter = _eff_date_filter(args, ist_sig)
+        user_filter = args.get('step_user','').strip()
+        if user_filter:
+            users = [u.strip() for u in user_filter.split(',')]
+            joined_users = "\',\'".join(users)
+            user_having = "AND TRIM(CONCAT(COALESCE(u.nameFirst,\'\'),' ',COALESCE(u.nameLast,\'\'))) IN (\'" + joined_users + "\')"
+        else:
+            user_having = ""
+
+        # Part 1: standard exclusions from classified CTE
+        core = _eff_core_query(args)
+        std_query = f"""
+        WITH {core}
+        SELECT worker_name, step_name, pair_status AS excl_reason, COUNT(*) AS cnt
+        FROM classified
+        WHERE pair_status != 'valid'
+        GROUP BY worker_name, step_name, pair_status
+        """
+        df_std = client.query(std_query).to_dataframe()
+
+        # Part 2: Planning TAR cases excluded because no pass fell in 75-225 min window
+        df_tar = pd.DataFrame()
+        if 'Planning' in valid_steps:
+            # User filter for this query uses worker_name (already resolved), not u.nameFirst
+            if user_filter:
+                users = [u.strip() for u in user_filter.split(',')]
+                joined_users = "','".join(users)
+                tar_user_having = "AND worker_name IN ('" + joined_users + "')"
+            else:
+                tar_user_having = ""
+
+            planning_tar_excl_query = f"""
+            WITH
+            cases AS (
+              SELECT f.id AS caseId
+              FROM {tbl('vw_fact_case')} f
+              JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+              WHERE {case_where} AND cc.name = 'Total Ankle Replacement'
+            ),
+            all_passes AS (
+              SELECT
+                sig.refId AS caseId,
+                sig.userId,
+                TRIM(CONCAT(COALESCE(u.nameFirst,''),' ',COALESCE(u.nameLast,''))) AS worker_name,
+                TIMESTAMP_DIFF(sig.createdAt, MAX(asn.createdAt), SECOND) AS actual_sec
+              FROM {_LOG} sig
+              INNER JOIN cases c ON sig.refId = c.caseId
+              LEFT JOIN {_LOG} asn
+                ON asn.refId = sig.refId
+                AND asn.userId = sig.userId
+                AND asn.type = 'r3idCaseRoleAssignmentUpdate'
+                AND asn.createdAt <= sig.createdAt
+                AND asn.createdAt >= TIMESTAMP_SUB(sig.createdAt, INTERVAL {_EFF_LOOKBACK} DAY)
+              LEFT JOIN {tbl('User')} u ON sig.userId = u.id
+              WHERE sig.type = 'r3idWorkModuleSignoff-Planning-WORKER-ACCEPT'
+                {date_filter}
+              GROUP BY sig.refId, sig.userId, sig.createdAt, u.nameFirst, u.nameLast
+            ),
+            best_pass AS (
+              SELECT caseId, userId, worker_name, actual_sec,
+                ROW_NUMBER() OVER (
+                  PARTITION BY caseId, userId
+                  ORDER BY ABS(actual_sec - 9000) ASC, actual_sec DESC
+                ) AS rn
+              FROM all_passes
+              WHERE actual_sec IS NOT NULL
+            ),
+            excluded_cases AS (
+              SELECT caseId, userId, worker_name,
+                CASE
+                  WHEN actual_sec < {_EFF_MIN_SEC} THEN 'click_through'
+                  ELSE 'over_standard'
+                END AS excl_reason
+              FROM best_pass
+              WHERE rn = 1
+                AND NOT (actual_sec BETWEEN 4500 AND 18000)
+            )
+            SELECT worker_name, 'Planning' AS step_name, excl_reason, COUNT(*) AS cnt
+            FROM excluded_cases
+            WHERE 1=1 {tar_user_having}
+            GROUP BY worker_name, excl_reason
+            """
+            df_tar = client.query(planning_tar_excl_query).to_dataframe()
+
+        df = pd.concat([df_std, df_tar], ignore_index=True) if not df_tar.empty else df_std
+
+        # Total = classified rows + Planning TAR excluded cases
+        core2 = _eff_core_query(args)
+        tot_q = f"WITH {core2} SELECT COUNT(*) AS n FROM classified"
+        tot_df = client.query(tot_q).to_dataframe()
+        classified_count = int(tot_df['n'].iloc[0]) if not tot_df.empty else 0
+        tar_excl_count = int(df_tar['cnt'].sum()) if not df_tar.empty else 0
+        total_signoffs = classified_count + tar_excl_count
+
+        by_user, by_step = {}, {}
+        total_excluded = 0
+        for _, row in df.iterrows():
+            wn   = (row['worker_name'] or 'Unknown').strip()
+            step = row['step_name']
+            ps   = row['excl_reason']
+            cnt  = int(row['cnt'])
+            total_excluded += cnt
+            if wn not in by_user:
+                by_user[wn] = {'label':wn,'click_through':0,'over_standard':0,'no_pair':0}
+            by_user[wn][ps] = by_user[wn].get(ps,0) + cnt
+            if step not in by_step:
+                by_step[step] = {'label':step,'click_through':0,'over_standard':0,'no_pair':0}
+            by_step[step][ps] = by_step[step].get(ps,0) + cnt
+
+        sort_key = lambda x: sum([x.get(k,0) for k in ['click_through','over_standard','no_pair']])
+        return jsonify({
+            "total_excluded": total_excluded,
+            "total_signoffs": total_signoffs,
+            "by_user":  sorted(by_user.values(),  key=sort_key, reverse=True),
+            "by_step":  sorted(by_step.values(),  key=sort_key, reverse=True),
+        })
     except Exception as e:
         return handle_error(request.endpoint, e)
 
