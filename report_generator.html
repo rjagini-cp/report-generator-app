@@ -521,6 +521,13 @@
         <i class="fa fa-file-chart-column" style="color:#008EAA"></i>
         <span style="font-weight:700;color:#008EAA;font-size:13px">Digital Production Report Generator</span>
       </div>
+      <!-- Hidden — not part of the visible UI. loadConfig() unconditionally
+           writes to #configStatus with no null-check; this exists purely so
+           that write doesn't throw and kill the rest of loadConfig() (which
+           is what populates the real, visible Product Name/Case Type lists
+           via applyConfig() -> buildRptProductList()). Do not remove without
+           also adding a null-check to loadConfig() first. -->
+      <span id="configStatus" style="display:none"></span>
 
       <div class="report-filter-body open" id="reportFilterBody">
         <!-- Date presets (own namespace: rpt-) -->
@@ -534,6 +541,7 @@
           <span class="date-preset" onclick="setRptDatePreset(this,7)">Last 7 Days</span>
           <select class="date-input" id="rptWeeklyPreset" style="width:auto;height:auto" onchange="if(this.value)setRptDatePreset(this,parseInt(this.value))">
             <option value="">Weekly Range...</option>
+            <option value="7">Last 7 Days</option>
             <option value="14">Last 2 Weeks</option>
             <option value="28">Last 4 Weeks</option>
             <option value="56">Last 8 Weeks</option>
@@ -543,6 +551,9 @@
           <span class="date-preset" onclick="setRptAllTime(this)">All Time</span>
           <span class="date-preset" onclick="setRptMonthPicker(this)">Select Month</span>
           <span class="date-preset" onclick="setRptCustomRange(this)">Custom Range</span>
+          <select id="groupSelect" onchange="onGroupSelect(this.value)" title="Selecting a group auto-checks its matching engineers in More Filters" style="height:auto;padding:5px 10px;border:1px solid var(--border-dark);border-radius:5px;font-size:11px;background:var(--bg-input);color:var(--text-2)">
+            <option value="">Group...</option>
+          </select>
         </div>
         <div class="month-picker-row" id="rptMonthPickerRow"><select class="date-input" id="rptMonthPicker" onchange="applyRptMonthPicker()"><option value="">Select month...</option></select></div>
         <div class="custom-date-row" id="rptCustomDateRow">
@@ -580,7 +591,7 @@
           </div>
         </div>
 
-        <!-- More Filters (rarely used) — Surgeon, Facility, State, Case Flags, collapsed by default -->
+        <!-- More Filters (rarely used) — Surgeon, Facility, State, Case Flags, Process Step, Group, Engineer -->
         <div class="adv-toggle" id="rptMoreToggle" onclick="toggleRptMoreFilters()" style="margin-top:8px"><i class="fa fa-chevron-down"></i><span>More Filters</span></div>
         <div class="adv-filters" id="rptMoreFilters" style="display:none">
           <div class="filter-grid" style="margin-top:8px">
@@ -595,29 +606,23 @@
               <button class="ms-btn" onclick="toggleDD('rptFlags')"><span class="ms-btn-text" id="lbl-rptFlags">All Cases</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptFlags" onclick="clearDD('rptFlags',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
               <div class="ms-dropdown" id="dd-rptFlags"><div class="ms-list" id="list-rptFlags"></div><div class="ms-footer"><span class="ms-count" id="cnt-rptFlags">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptFlags',event)">Clear</button></div></div></div>
             </div>
-          </div>
-        </div>
-
-        <!-- Step + Engineer filter — shown only when Process Efficiency or Exclusion Breakdown is checked -->
-        <div id="rptUserFilterRow" style="display:none;margin-top:8px;padding:10px 12px;background:var(--accent-bg);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px">
-          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:10px"><i class="fa fa-user-cog"></i> Efficiency Filters <span style="font-size:10px;font-weight:400;color:var(--text-4)">(for Process Efficiency &amp; Exclusion charts)</span></div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-            <!-- Process Step dropdown — identical to R3ID -->
-            <div class="ms-wrap" style="flex:1;min-width:180px">
-              <div class="ms-label">Process Step</div>
-              <button class="ms-btn" onclick="toggleDD('rptStep')"><span class="ms-btn-text" id="lbl-rptStep">Load steps →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStep" onclick="clearDD('rptStep',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-              <div class="ms-dropdown" id="dd-rptStep"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStep',this.value)"/></div><div class="ms-list" id="list-rptStep"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStep">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStep',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStep')">All</button></div></div></div>
+            <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
+              <div style="flex:1">
+                <div class="ms-label">Process Step</div>
+                <button class="ms-btn" onclick="toggleDD('rptStep')"><span class="ms-btn-text" id="lbl-rptStep">Load steps →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStep" onclick="clearDD('rptStep',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+                <div class="ms-dropdown" id="dd-rptStep"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStep',this.value)"/></div><div class="ms-list" id="list-rptStep"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStep">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStep',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStep')">All</button></div></div></div>
+              </div>
+              <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadStepsBtn" onclick="loadRptSteps()"><i class="fa fa-sync"></i> Load</button>
             </div>
-            <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadStepsBtn" onclick="loadRptSteps()"><i class="fa fa-sync"></i> Load</button>
-            <!-- Engineer (User) dropdown — identical to R3ID -->
-            <div class="ms-wrap" style="flex:1;min-width:180px">
-              <div class="ms-label">Engineer</div>
-              <button class="ms-btn" onclick="toggleDD('rptStepUser')"><span class="ms-btn-text" id="lbl-rptStepUser">Load users →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStepUser" onclick="clearDD('rptStepUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-              <div class="ms-dropdown" id="dd-rptStepUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStepUser',this.value)"/></div><div class="ms-list" id="list-rptStepUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStepUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStepUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStepUser')">All</button></div></div></div>
+            <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
+              <div style="flex:1">
+                <div class="ms-label">Engineer</div>
+                <button class="ms-btn" onclick="toggleDD('rptStepUser')"><span class="ms-btn-text" id="lbl-rptStepUser">Load users →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStepUser" onclick="clearDD('rptStepUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+                <div class="ms-dropdown" id="dd-rptStepUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStepUser',this.value)"/></div><div class="ms-list" id="list-rptStepUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStepUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStepUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStepUser')">All</button></div></div></div>
+              </div>
+              <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadUsersBtn" onclick="loadRptUsers()"><i class="fa fa-sync"></i> Load</button>
             </div>
-            <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadUsersBtn" onclick="loadRptUsers()"><i class="fa fa-sync"></i> Load</button>
           </div>
-          <div style="font-size:10px;color:var(--text-4);margin-top:8px"><i class="fa fa-info-circle"></i> Select step first, then load engineers. Leave both blank = all steps &amp; all engineers.</div>
         </div>
 
         <!-- Chart selector -->
@@ -911,104 +916,6 @@
       </div><!-- /report-filter-body -->
     </div><!-- /report-card -->
 
-    <!-- FILTERS -->
-    <div class="filters-card" style="border-left:4px solid var(--accent-dark);display:none">
-      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid var(--accent-dark);margin-bottom:10px;cursor:pointer;user-select:none" onclick="toggleR3IDFilters()">
-        <i class="fa fa-filter" style="color:var(--accent-dark)"></i>
-        <span style="font-weight:700;color:var(--accent-dark);font-size:13px">R3ID Filters (Customs, TAR, rTSA etc.)</span>
-        <i class="fa fa-chevron-down" id="r3idFilterChevron" style="color:var(--text-4);transition:transform .2s"></i>
-      </div>
-      <div id="r3idFilterBody" style="display:none">
-      <div class="filters-hdr">
-        <span class="filters-title"><i class="fa fa-filter"></i> Filters <span id="configStatus" style="font-size:9px;color:var(--text-4);font-weight:400;margin-left:4px"></span></span>
-        <div class="filter-actions">
-          <button class="btn-sm btn-ghost" onclick="clearAllFilters()"><i class="fa fa-times"></i> Clear All</button>
-          <button class="btn-sm btn-accent" onclick="applyFilters()"><i class="fa fa-check"></i> Apply</button>
-        </div>
-      </div>
-      <div class="date-presets">
-        <span class="date-preset" onclick="setDatePreset(this,7)">Last 7 Days</span>
-        <span class="date-preset" onclick="setDatePreset(this,14)">Last 2 Weeks</span>
-        <span class="date-preset" onclick="setDatePreset(this,28)">Last 4 Weeks</span>
-        <span class="date-preset" onclick="setDatePreset(this,56)">Last 8 Weeks</span>
-        <span class="date-preset" onclick="setDatePreset(this,180)">Last 6 Months</span>
-        <span class="date-preset" onclick="setDatePreset(this,365)">Last 12 Months</span>
-        <span class="date-preset" onclick="setAllTime(this)">All Time</span>
-        <span class="date-preset" onclick="setMonthPicker(this)">Select Month</span>
-        <span class="date-preset" onclick="setCustomRange(this)">Custom Range</span>
-      </div>
-      <div class="month-picker-row" id="monthPickerRow"><select class="date-input" id="monthPicker" onchange="applyMonthPicker()"><option value="">Select month...</option></select></div>
-      <div class="custom-date-row" id="customDateRow">
-        <input type="date" class="date-input" id="dateFrom"/>
-        <input type="date" class="date-input" id="dateTo"/>
-      </div>
-      <div class="filter-grid">
-        <div class="ms-wrap">
-          <div class="ms-label">Product Group</div>
-          <button class="ms-btn" onclick="toggleDD('productGroup')"><span class="ms-btn-text" id="lbl-productGroup">All Groups</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-productGroup" onclick="clearDD('productGroup',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-          <div class="ms-dropdown" id="dd-productGroup"><div class="ms-search"><input placeholder="Search groups..." oninput="filterList('productGroup',this.value)"/></div><div class="ms-list" id="list-productGroup"></div><div class="ms-footer"><span class="ms-count" id="cnt-productGroup">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('productGroup',event)">Clear</button><button class="ms-selectall" onclick="selectAll('productGroup')">All</button></div></div></div>
-        </div>
-        <div class="ms-wrap">
-          <div class="ms-label">Product Name</div>
-          <button class="ms-btn" onclick="toggleDD('productName')"><span class="ms-btn-text" id="lbl-productName">All Products</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-productName" onclick="clearDD('productName',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-          <div class="ms-dropdown" id="dd-productName"><div class="ms-search"><input placeholder="Search products..." oninput="filterList('productName',this.value)"/></div><div class="ms-list" id="list-productName"></div><div class="ms-footer"><span class="ms-count" id="cnt-productName">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('productName',event)">Clear</button><button class="ms-selectall" onclick="selectAll('productName')">All</button></div></div></div>
-        </div>
-        <div class="ms-wrap">
-          <div class="ms-label">Case Type</div>
-          <button class="ms-btn" onclick="toggleDD('caseType')"><span class="ms-btn-text" id="lbl-caseType">All Types</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-caseType" onclick="clearDD('caseType',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-          <div class="ms-dropdown" id="dd-caseType"><div class="ms-search"><input placeholder="Search..." oninput="filterList('caseType',this.value)"/></div><div class="ms-list" id="list-caseType"><div style="padding:10px;color:var(--text-4);font-size:11px">Loading...</div></div><div class="ms-footer"><span class="ms-count" id="cnt-caseType">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('caseType',event)">Clear</button><button class="ms-selectall" onclick="selectAll('caseType')">All</button></div></div></div>
-        </div>
-        <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
-          <div style="flex:1">
-            <div class="ms-label">Process Step</div>
-            <button class="ms-btn" onclick="toggleDD('step')"><span class="ms-btn-text" id="lbl-step">Load steps →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-step" onclick="clearDD('step',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-            <div class="ms-dropdown" id="dd-step"><div class="ms-search"><input placeholder="Search..." oninput="filterList('step',this.value)"/></div><div class="ms-list" id="list-step"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-step">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('step',event)">Clear</button><button class="ms-selectall" onclick="selectAll('step')">All</button></div></div></div>
-          </div>
-          <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="loadStepsBtn" onclick="loadSteps()"><i class="fa fa-sync"></i> Load</button>
-        </div>
-        <div class="ms-wrap">
-          <div class="ms-label">Group <span style="font-weight:400;color:var(--text-4);font-size:9px">(auto-selects matching users below)</span></div>
-          <select id="groupSelect" onchange="onGroupSelect(this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg-input);color:var(--text-1)">
-            <option value="">— Select a group —</option>
-          </select>
-        </div>
-        <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
-          <div style="flex:1">
-            <div class="ms-label">User</div>
-            <button class="ms-btn" onclick="toggleDD('stepUser')"><span class="ms-btn-text" id="lbl-stepUser">Load users →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-stepUser" onclick="clearDD('stepUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-            <div class="ms-dropdown" id="dd-stepUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('stepUser',this.value)"/></div><div class="ms-list" id="list-stepUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-stepUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('stepUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('stepUser')">All</button></div></div></div>
-          </div>
-          <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="loadUsersBtn" onclick="loadUsers()"><i class="fa fa-sync"></i> Load</button>
-        </div>
-        <div class="ms-wrap" style="margin-top:-4px">
-          <div class="ms-label" style="font-size:9px;color:var(--text-4)">User Role <span style="font-weight:400;text-transform:none;letter-spacing:0">(applies when a user is selected)</span></div>
-          <div style="display:flex;gap:4px">
-            <button class="chart-toggle active" id="userRoleWorkerBtn" onclick="setUserRole('worker',this)" title="Show cases this user worked on as a designer (WORKER signoffs)">Designed</button>
-            <button class="chart-toggle" id="userRoleReviewerBtn" onclick="setUserRole('reviewer',this)" title="Show cases this user reviewed (REVIEWER/APPROVER signoffs)">Reviewed</button>
-          </div>
-        </div>
-      </div>
-      <div class="adv-toggle" id="advToggle" onclick="toggleAdv()"><i class="fa fa-chevron-down"></i><span>Advanced Filters</span></div>
-      <div class="adv-filters" id="advFilters">
-        <div class="filter-grid">
-          <div class="ms-wrap">
-            <div class="ms-label">Side</div>
-            <button class="ms-btn" onclick="toggleDD('laterality')"><span class="ms-btn-text" id="lbl-laterality">All</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-laterality" onclick="clearDD('laterality',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-            <div class="ms-dropdown" id="dd-laterality"><div class="ms-search"><input placeholder="Search..." oninput="filterList('laterality',this.value)"/></div><div class="ms-list" id="list-laterality"></div><div class="ms-footer"><span class="ms-count" id="cnt-laterality">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('laterality',event)">Clear</button><button class="ms-selectall" onclick="selectAll('laterality')">All</button></div></div></div>
-          </div>
-          <div class="ms-wrap"><div class="ms-label">Facility</div><input type="text" class="text-filter" id="f-facility" placeholder="e.g. Kaiser"/></div>
-          <div class="ms-wrap"><div class="ms-label">State</div><input type="text" class="text-filter" id="f-state" placeholder="e.g. CA"/></div>
-          <div class="ms-wrap">
-            <div class="ms-label">Case Flags</div>
-            <button class="ms-btn" onclick="toggleDD('flags')"><span class="ms-btn-text" id="lbl-flags">All Cases</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-flags" onclick="clearDD('flags',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-            <div class="ms-dropdown" id="dd-flags"><div class="ms-list" id="list-flags"></div><div class="ms-footer"><span class="ms-count" id="cnt-flags">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('flags',event)">Clear</button></div></div></div>
-          </div>
-          <div class="ms-wrap"><div class="ms-label">Surgeon (Last Name)</div><input type="text" class="text-filter" id="f-surgeon" placeholder="e.g. Smith"/></div>
-        </div>
-      </div>
-      </div><!-- /r3idFilterBody -->
-    </div>
-
     <!-- CASE LIST — third section, always visible, outside R3ID and CamStar -->
     <div class="filters-card" style="margin-top:24px;border-left:4px solid #005F72">
       <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #005F72;margin-bottom:10px">
@@ -1159,15 +1066,15 @@ async function loadUserGroups(){
 
 async function onGroupSelect(teamName){
   if(!teamName) return;
-  if(!document.querySelectorAll('#list-stepUser input[type=checkbox]').length){
-    await loadUsers();
+  if(!document.querySelectorAll('#list-rptStepUser input[type=checkbox]').length){
+    await loadRptUsers();
   }
-  clearDD('stepUser', null);
+  clearDD('rptStepUser', null);
   const members = (USER_GROUPS_LIVE.bigquery || {})[teamName] || [];
-  document.getElementById('list-stepUser')?.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+  document.getElementById('list-rptStepUser')?.querySelectorAll('input[type=checkbox]').forEach(cb=>{
     if(members.includes(cb.value)){
       cb.checked = true;
-      onCheck('stepUser', cb.value, true);
+      onCheck('rptStepUser', cb.value, true);
     }
   });
   if(!members.length){
@@ -2900,7 +2807,7 @@ function applyAllTableFilters(){
   renderTable();
 }
 
-async function fetchAllCases(){const btn=document.getElementById('fetchBtn');btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i> Fetching...';isOnHoldTable=false;showLoading('Fetching cases...');try{const res=await fetch(`${API}/analytics/cases?${buildQS()}`);const data=res.ok?await res.json():null;if(data?.cases)loadCasesIntoTable(data.cases,'All Cases',`${data.cases.length} cases - created in date range`,false);}catch(e){toast('Error','err');}finally{btn.disabled=false;btn.innerHTML='<i class="fa fa-search"></i> Fetch All Cases';hideLoading();}}
+async function fetchAllCases(){const btn=document.getElementById('fetchBtn');btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i> Fetching...';isOnHoldTable=false;showLoading('Fetching cases...');try{const res=await fetch(`${API}/analytics/cases?${buildRptQS()}`);const data=res.ok?await res.json():null;if(data?.cases)loadCasesIntoTable(data.cases,'All Cases',`${data.cases.length} cases - created in date range`,false);}catch(e){toast('Error','err');}finally{btn.disabled=false;btn.innerHTML='<i class="fa fa-search"></i> Fetch All Cases';hideLoading();}}
 async function fetchNlqCases(){if(!lastNlqRows?.length)return;const labels=lastNlqRows.map(r=>r.label).filter(Boolean);if(!labels.length)return;isOnHoldTable=false;showLoading('Fetching cases...');try{const res=await fetch(`${API}/analytics/cases?${buildQS({product:labels.join(',')})}`);const data=res.ok?await res.json():null;if(data?.cases)loadCasesIntoTable(data.cases,'NLQ Result Cases',`${data.count} cases`,false);}catch(e){toast('Error','err');}finally{hideLoading();}}
 
 function notesCell(c){
