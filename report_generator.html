@@ -462,8 +462,8 @@
   <div class="sb-section">Dashboard</div>
   <nav><ul>
     <li><a href="https://restor3dindia.netlify.app/"><i class="fa fa-home"></i>Dashboard</a></li>
-    <li><a href="data-genie.html" class="active"><i class="fa fa-bolt"></i>Data Genie</a></li>
-    <li><div class="sb-item" onclick="toggleSub(this)"><i class="fa fa-chart-pie icon"></i>Overview<i class="fa fa-chevron-down sb-arrow"></i></div>
+    <li style="display:none"><a href="data-genie.html" class="active"><i class="fa fa-bolt"></i>Data Genie</a></li>
+    <li style="display:none"><div class="sb-item" onclick="toggleSub(this)"><i class="fa fa-chart-pie icon"></i>Overview<i class="fa fa-chevron-down sb-arrow"></i></div>
       <ul class="sb-sub">
         <li><a href="https://restor3dindia.netlify.app/overview-team-metrics">Daily Utilization</a></li>
         <li><a href="https://restor3dindia.netlify.app/overview-graphs">Team Metrics</a></li>
@@ -471,11 +471,11 @@
         <li><a href="https://restor3dindia.netlify.app/last-day-targets">Last Day Targets</a></li>
         <li><a href="https://restor3dindia.netlify.app/bq-metrics">BigQuery</a></li>
       </ul></li>
-    <li><a href="https://restor3dindia.netlify.app/metrics"><i class="fa fa-chart-bar"></i>My Metrics</a></li>
-    <li><a href="https://restor3dindia.netlify.app/assignments"><i class="fa fa-tasks"></i>Assignment</a></li>
+    <li style="display:none"><a href="https://restor3dindia.netlify.app/metrics"><i class="fa fa-chart-bar"></i>My Metrics</a></li>
+    <li style="display:none"><a href="https://restor3dindia.netlify.app/assignments"><i class="fa fa-tasks"></i>Assignment</a></li>
   </ul></nav>
-  <div class="sb-section">Applications</div>
-  <nav><ul>
+  <div class="sb-section" style="display:none">Applications</div>
+  <nav style="display:none"><ul>
     <li><a href="https://outlook.office.com/" target="_blank"><i class="fa fa-envelope"></i>Email</a></li>
     <li><a href="https://teams.cloud.microsoft/" target="_blank"><i class="fa fa-comments"></i>Teams</a></li>
     <li><a href="https://restor3dindia.netlify.app/todo"><i class="fa fa-check-square"></i>Todo</a></li>
@@ -517,13 +517,12 @@
     <!-- ══════════════════════════════════════════════════════ -->
     <div class="report-card" id="reportSection">
       <!-- Collapsible header -->
-      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #008EAA;margin-bottom:10px;cursor:pointer;user-select:none" onclick="toggleReportSection()">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #008EAA;margin-bottom:10px;user-select:none">
         <i class="fa fa-file-chart-column" style="color:#008EAA"></i>
         <span style="font-weight:700;color:#008EAA;font-size:13px">Digital Production Report Generator</span>
-        <i class="fa fa-chevron-down" id="reportChevron" style="color:var(--text-4);transition:transform .2s"></i>
       </div>
 
-      <div class="report-filter-body" id="reportFilterBody">
+      <div class="report-filter-body open" id="reportFilterBody">
         <!-- Date presets (own namespace: rpt-) -->
         <div class="filters-hdr" style="margin-bottom:8px">
           <span class="filters-title"><i class="fa fa-calendar-alt"></i> Report Filters</span>
@@ -533,9 +532,12 @@
         </div>
         <div class="date-presets" id="rptDatePresets">
           <span class="date-preset" onclick="setRptDatePreset(this,7)">Last 7 Days</span>
-          <span class="date-preset" onclick="setRptDatePreset(this,14)">Last 2 Weeks</span>
-          <span class="date-preset" onclick="setRptDatePreset(this,28)">Last 4 Weeks</span>
-          <span class="date-preset" onclick="setRptDatePreset(this,56)">Last 8 Weeks</span>
+          <select class="date-input" id="rptWeeklyPreset" style="width:auto;height:auto" onchange="if(this.value)setRptDatePreset(this,parseInt(this.value))">
+            <option value="">Weekly Range...</option>
+            <option value="14">Last 2 Weeks</option>
+            <option value="28">Last 4 Weeks</option>
+            <option value="56">Last 8 Weeks</option>
+          </select>
           <span class="date-preset" onclick="setRptDatePreset(this,180)">Last 6 Months</span>
           <span class="date-preset" onclick="setRptDatePreset(this,365)">Last 12 Months</span>
           <span class="date-preset" onclick="setRptAllTime(this)">All Time</span>
@@ -551,7 +553,7 @@
         <!-- Filters grid: Product Group, Product Name, Case Type -->
         <div class="filter-grid" style="margin-top:10px">
           <!-- Product Group -->
-          <div class="ms-wrap">
+          <div class="ms-wrap" style="display:none">
             <div class="ms-label">Product Group</div>
             <button class="ms-btn" onclick="toggleDD('rptProductGroup')"><span class="ms-btn-text" id="lbl-rptProductGroup">All Groups</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptProductGroup" onclick="clearDD('rptProductGroup',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
             <div class="ms-dropdown" id="dd-rptProductGroup"><div class="ms-search"><input placeholder="Search groups..." oninput="filterList('rptProductGroup',this.value)"/></div><div class="ms-list" id="list-rptProductGroup"></div><div class="ms-footer"><span class="ms-count" id="cnt-rptProductGroup">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptProductGroup',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptProductGroup')">All</button></div></div></div>
@@ -910,7 +912,7 @@
     </div><!-- /report-card -->
 
     <!-- FILTERS -->
-    <div class="filters-card" style="border-left:4px solid var(--accent-dark)">
+    <div class="filters-card" style="border-left:4px solid var(--accent-dark);display:none">
       <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid var(--accent-dark);margin-bottom:10px;cursor:pointer;user-select:none" onclick="toggleR3IDFilters()">
         <i class="fa fa-filter" style="color:var(--accent-dark)"></i>
         <span style="font-weight:700;color:var(--accent-dark);font-size:13px">R3ID Filters (Customs, TAR, rTSA etc.)</span>
@@ -3163,7 +3165,7 @@ function toast(msg,type='ok'){const c=document.getElementById('toastContainer'),
 //  REPORT GENERATION
 //  Config: DataGenie_Report_Config.yaml
 // ══════════════════════════════════════════════════════════════
-let rptCollapsed = true;
+let rptCollapsed = false;
 let rptDateFrom = '', rptDateTo = '', rptIsAllTime = false;
 const RPT_SEL = {rptProductGroup:[], rptProductName:[], rptCaseType:[], rptFlags:[], rptStep:[], rptStepUser:[]};
 SEL.rptProductGroup = RPT_SEL.rptProductGroup;
