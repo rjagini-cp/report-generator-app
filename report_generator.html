@@ -538,7 +538,6 @@
           </div>
         </div>
         <div class="date-presets" id="rptDatePresets">
-          <span class="date-preset" onclick="setRptDatePreset(this,7)">Last 7 Days</span>
           <select class="date-input" id="rptWeeklyPreset" style="width:auto;height:auto" onchange="if(this.value)setRptDatePreset(this,parseInt(this.value))">
             <option value="">Weekly Range...</option>
             <option value="7">Last 7 Days</option>
@@ -548,7 +547,6 @@
           </select>
           <span class="date-preset" onclick="setRptDatePreset(this,180)">Last 6 Months</span>
           <span class="date-preset" onclick="setRptDatePreset(this,365)">Last 12 Months</span>
-          <span class="date-preset" onclick="setRptAllTime(this)">All Time</span>
           <span class="date-preset" onclick="setRptMonthPicker(this)">Select Month</span>
           <span class="date-preset" onclick="setRptCustomRange(this)">Custom Range</span>
           <select id="groupSelect" onchange="onGroupSelect(this.value)" title="Selecting a group auto-checks its matching engineers in More Filters" style="height:auto;padding:5px 10px;border:1px solid var(--border-dark);border-radius:5px;font-size:11px;background:var(--bg-input);color:var(--text-2)">
