@@ -2434,7 +2434,7 @@ function refreshProductList(){
   if(searchInput&&searchInput.value)filterList('productName',searchInput.value);
 }
 function buildStaticLists(){buildList('laterality',LAT_OPTS);buildList('flags',FLAG_OPTS);}
-function populateMonthPicker(){const sel=document.getElementById('monthPicker'),now=new Date();for(let i=0;i<18;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');sel.innerHTML+=`<option value="${y}-${m}">${d.toLocaleString('default',{month:'long',year:'numeric'})}</option>`;}}
+function populateMonthPicker(){const sel=document.getElementById('monthPicker'),now=new Date();for(let i=0;i<18;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');if(sel)sel.innerHTML+=`<option value="${y}-${m}">${d.toLocaleString('default',{month:'long',year:'numeric'})}</option>`;}}
 function populateCsMonthPicker(){const sel=document.getElementById('cs-month-picker'),now=new Date();for(let i=0;i<18;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');sel.innerHTML+=`<option value="${y}-${m}">${d.toLocaleString('default',{month:'long',year:'numeric'})}</option>`;}}
 function applyCsMonthPicker(){
   const val=document.getElementById('cs-month-picker').value;if(!val)return;
