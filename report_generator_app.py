@@ -2194,6 +2194,268 @@ def report_queue_time():
     except Exception as e:
         return handle_error(request.endpoint, e)
 
+
+# ══════════════════════════════════════════════════════════════
+# Ported from r3id_app.py — KPI cards, WIP pipeline, submission/completion trends
+# These only use helpers already shared between the two apps (build_where_clause,
+# case_joins, on_hold_cte, signoff_cte, volume_case_joins, volume_where_clause,
+# METRIC_MAP), so no new dependencies were introduced.
+# ══════════════════════════════════════════════════════════════
+
+def kpi_or_cases(args, date_field, metric_sql, fetch_cases=False, include_hold_user=False, exclude_outliers=False, avg_digital_lt=None):
+    where = build_where_clause(args)
+    df_filter = date_range_filter(date_field, args.get('date_from',''), args.get('date_to',''))
+    if exclude_outliers:
+        where = f"{where} AND {outlier_exclusion_sql(avg_digital_lt)}"
+    if fetch_cases:
+        hold_cte_str = f", {on_hold_user_cte()}" if include_hold_user else ""
+        query = f"""
+        WITH {signoff_cte()}, {on_hold_cte()}{hold_cte_str}
+        SELECT {case_select_fields(include_hold_user)}
+        {case_joins(include_hold_user)}
+        WHERE {where} AND {df_filter}
+        ORDER BY f.createdAt DESC LIMIT 500
+        """
+        df = client.query(query).to_dataframe()
+        return jsonify({"cases": format_cases(df), "count": len(df)})
+    else:
+        query = f"""
+        WITH {signoff_cte()}, {on_hold_cte()}
+        SELECT COUNT(DISTINCT f.id) as case_count, ROUND(AVG({metric_sql}), 1) as avg_lt
+        {case_joins()}
+        WHERE {where} AND {df_filter}
+        """
+        df = client.query(query).to_dataframe().fillna(0)
+        row = df.iloc[0]
+        return jsonify({"case_count": int(row.get('case_count', 0)), "avg_lt": round(float(row.get('avg_lt', 0)), 1)})
+
+@app.route("/analytics/kpi/total", methods=["GET"])
+def kpi_total():
+    try:
+        args = request.args
+        return kpi_or_cases(args, 's.ship_wrk_comp_date', METRIC_MAP['total_lt'][0],
+            args.get('fetch_cases')=='true', exclude_outliers=args.get('exclude_outliers')=='true',
+            avg_digital_lt=float(args.get('avg_digital_lt',0)))
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+@app.route("/analytics/kpi/digital", methods=["GET"])
+def kpi_digital():
+    try:
+        args = request.args
+        return kpi_or_cases(args, 'sd.first_psp_review_date', METRIC_MAP['digital_lt'][0],
+            args.get('fetch_cases')=='true', exclude_outliers=args.get('exclude_outliers')=='true',
+            avg_digital_lt=float(args.get('avg_digital_lt',0)))
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+@app.route("/analytics/kpi/onhold", methods=["GET"])
+def kpi_onhold():
+    try:
+        args = request.args
+        fetch = args.get('fetch_cases') == 'true'
+        where = build_where_clause(args) + " AND f.onHold = true"
+        if fetch:
+            query = f"WITH {signoff_cte()}, {on_hold_cte()}, {on_hold_user_cte()} SELECT {case_select_fields(True)} {case_joins(True)} WHERE {where} ORDER BY oh.total_hold_days DESC LIMIT 500"
+            df = client.query(query).to_dataframe()
+            return jsonify({"cases": format_cases(df), "count": len(df)})
+        else:
+            query = f"WITH {signoff_cte()}, {on_hold_cte()} SELECT COUNT(DISTINCT f.id) as case_count {case_joins()} WHERE {where}"
+            df = client.query(query).to_dataframe().fillna(0)
+            return jsonify({"case_count": int(df.iloc[0].get('case_count', 0))})
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+@app.route("/analytics/wip", methods=["GET"])
+def analytics_wip():
+    try:
+        args = request.args
+        where = build_where_clause(args)
+        fetch_step = args.get('fetch_step')
+        # Cases where Design Call Prep REVIEWER signoff exists AND case sits in PLANNING_REVIEW work queue
+        # are awaiting surgeon — they should NOT appear in CAD Design WIP, but should appear in Surgeon Approval.
+        dcp_done_cte = f"""
+        design_call_prep_done AS (
+            SELECT DISTINCT w.caseId
+            FROM {tbl('WorkModuleSignoff')} w
+            LEFT JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
+            LEFT JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
+            WHERE w.deleted = false
+              AND wm.name = 'Design Call Prep'
+              AND w.workModuleUserType = 'REVIEWER'
+              AND w.workModuleSignatureType = 'ACCEPT'
+        )"""
+        # In the CAD Design (psp_design) bucket: exclude cases where Design Call Prep is done AND case is in PLANNING_REVIEW.
+        # Those cases have left CAD's hands and are waiting on surgeon — they belong in surgeon_approval instead.
+        awaiting_surgeon_predicate = "(f.id IN (SELECT caseId FROM design_call_prep_done) AND f.work_queue = 'PLANNING_REVIEW')"
+        # Implicit-PSP rule: a case is considered "past PSP" if any of these exist:
+        #   - first_psp_review_date (formal PSP REVIEWER ACCEPT)
+        #   - peer_review_date (completed peer review without formal PSP signoff)
+        #   - ship_wrk_comp_date (shipped without formal PSP signoff)
+        past_psp = "(sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)"
+        # Marketing exclusion — applies to Peer Review and Manufacturing WIP.
+        # A case is a marketing case if 'marketing' appears anywhere in the surgeon name (case-insensitive).
+        not_marketing = "(LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')"
+        STEP_FILTERS = {
+            'segmentation':
+                f"s.first_scan_upload_date IS NOT NULL AND sd.seg_review_date IS NULL AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')",
+            'psp_design':
+                f"sd.seg_review_date IS NOT NULL AND NOT {past_psp} AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY') AND NOT {awaiting_surgeon_predicate}"
+                f" OR (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND sd.surgeon_last_action_reject = true AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY'))",
+            'surgeon_approval':
+                f"(sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND COALESCE(sd.surgeon_last_action_reject, false) = false AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')) OR (sd.seg_review_date IS NOT NULL AND NOT {past_psp} AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY') AND {awaiting_surgeon_predicate})",
+            'peer_review':
+                # Exclude: awaiting surgeon approval (already in surgeon bucket)
+                # Exclude: in MANUFACTURING phase (already in manufacturing bucket)
+                f"{past_psp} AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL"
+                f" AND f.onHold = false AND f.canceled = false"
+                f" AND f.phase NOT IN ('SHIPPING','SURGERY','MANUFACTURING')"
+                f" AND NOT (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND COALESCE(sd.surgeon_last_action_reject, false) = false)"
+                f" AND {not_marketing}",
+            'manufacturing':
+                f"f.phase = 'MANUFACTURING' AND f.onHold = false AND f.canceled = false AND s.ship_wrk_comp_date IS NULL AND {not_marketing}",
+        }
+        if fetch_step:
+            step_filter = STEP_FILTERS.get(fetch_step, "1=1")
+            query = f"""
+            WITH {signoff_cte()}, {on_hold_cte()}, {dcp_done_cte}
+            SELECT {case_select_fields()}
+            {case_joins()}
+            WHERE {where} AND ({step_filter})
+            ORDER BY f.createdAt DESC LIMIT 500
+            """
+            df = client.query(query).to_dataframe()
+            return jsonify({"cases": format_cases(df), "count": len(df), "step": fetch_step})
+        query = f"""
+        WITH {signoff_cte()}, {on_hold_cte()}, {dcp_done_cte}
+        SELECT
+            COUNTIF(s.first_scan_upload_date IS NOT NULL AND sd.seg_review_date IS NULL
+                AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')) as segmentation,
+            COUNTIF(
+                (sd.seg_review_date IS NOT NULL
+                AND NOT (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
+                AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')
+                AND NOT {awaiting_surgeon_predicate})
+                OR
+                (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL
+                AND COALESCE(sd.surgeon_last_action_reject, false) = true
+                AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL
+                AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY'))
+            ) as psp_design,
+            COUNTIF(
+                (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL
+                    AND COALESCE(sd.surgeon_last_action_reject, false) = false
+                    AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL
+                    AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY'))
+                OR
+                (sd.seg_review_date IS NOT NULL
+                    AND NOT (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
+                    AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')
+                    AND {awaiting_surgeon_predicate})
+            ) as surgeon_approval,
+            COUNTIF((sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
+                AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL
+                AND f.onHold = false AND f.canceled = false
+                AND f.phase NOT IN ('SHIPPING','SURGERY','MANUFACTURING')
+                AND NOT (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND COALESCE(sd.surgeon_last_action_reject, false) = false)
+                AND (LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')) as peer_review,
+            COUNTIF(f.phase = 'MANUFACTURING' AND f.onHold = false AND f.canceled = false AND s.ship_wrk_comp_date IS NULL
+                AND (LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')) as manufacturing
+        {case_joins()}
+        WHERE {where}
+        """
+        df = client.query(query).to_dataframe().fillna(0)
+        row = df.iloc[0]
+        return jsonify({
+            "segmentation": int(row.get('segmentation', 0)),
+            "psp_design": int(row.get('psp_design', 0)),
+            "surgeon_approval": int(row.get('surgeon_approval', 0)),
+            "peer_review": int(row.get('peer_review', 0)),
+            "manufacturing": int(row.get('manufacturing', 0)),
+        })
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+@app.route("/analytics/trends", methods=["GET"])
+def analytics_trends():
+    try:
+        args = request.args
+        metric = args.get('metric', 'volume')
+        granularity = args.get('granularity', 'monthly')
+        exclude_outliers = args.get('exclude_outliers') == 'true'
+        avg_digital_lt = float(args.get('avg_digital_lt', 0))
+        trunc = 'WEEK' if granularity == 'weekly' else 'MONTH'
+        # breakdown_by: 'product' (default) or 'case_type'.
+        # When 'case_type', group by ct.name / f.case_type_name instead of product.
+        breakdown_by = args.get('breakdown_by', 'product').strip().lower()
+        use_case_type = breakdown_by == 'case_type'
+
+        if metric == 'volume':
+            # Use raw Case table to include COMPLETED cases
+            where = volume_where_clause(args)
+            # date_field can be overridden by caller:
+            #   first_scan_upload_date → Submitted (scan upload)
+            #   first_psp_review_date  → Completed (PSP review) [default, uses effective PSP = LEAST(psp, peer review, ship)]
+            date_field_param = args.get('date_field', '').strip()
+            if date_field_param == 'first_scan_upload_date':
+                date_field = 's.first_scan_upload_date'
+            else:
+                # PSP reviewer accept date only — matches stat card and process counts definition
+                date_field = "CAST(sd.first_psp_review_date AS DATETIME)"
+            df_filter = date_range_filter(date_field, args.get('date_from',''), args.get('date_to',''))
+            # Also require PSP date is not null for completed bar
+            if date_field_param != 'first_scan_upload_date':
+                df_filter += " AND sd.first_psp_review_date IS NOT NULL"
+            # Group by case type or product
+            group_field = "ct.name" if use_case_type else "cc.name"
+            query = f"""
+            WITH {signoff_cte()}
+            SELECT DATE_TRUNC(DATE(CAST({date_field} AS DATETIME)), {trunc}) as period,
+                {group_field} as product, COUNT(DISTINCT f.id) as value
+            {volume_case_joins()}
+            WHERE {where} AND {df_filter}
+            GROUP BY period, product ORDER BY period ASC
+            """
+        else:
+            where = build_where_clause(args)
+            if exclude_outliers:
+                where = f"{where} AND {outlier_exclusion_sql(avg_digital_lt)}"
+            if metric in METRIC_MAP:
+                date_field = METRIC_MAP[metric][2]
+                agg_expr = f"ROUND(AVG({METRIC_MAP[metric][0]}), 1)"
+            else:
+                date_field = 'sd.first_psp_review_date'
+                agg_expr = 'COUNT(DISTINCT f.id)'
+            df_filter = date_range_filter(date_field, args.get('date_from',''), args.get('date_to',''))
+            # Group by case type or product
+            group_field = "f.case_type_name" if use_case_type else "f.case_category_name"
+            query = f"""
+            WITH {signoff_cte()}, {on_hold_cte()}
+            SELECT DATE_TRUNC(DATE(CAST({date_field} AS DATETIME)), {trunc}) as period,
+                {group_field} as product, {agg_expr} as value
+            {case_joins()}
+            WHERE {where} AND {df_filter}
+            GROUP BY period, product ORDER BY period ASC
+            """
+
+        df = client.query(query).to_dataframe().astype(str)
+        periods = sorted(df['period'].unique().tolist())
+        products = sorted(df['product'].unique().tolist())
+        colors = ['#0284c7','#16a34a','#7c3aed','#d97706','#0891b2','#dc2626','#059669','#9333ea']
+        datasets = []
+        for i, product in enumerate(products):
+            pdf = df[df['product'] == product]
+            period_map = dict(zip(pdf['period'].tolist(), pdf['value'].tolist()))
+            data = []
+            for p in periods:
+                try: data.append(float(period_map.get(p, 0) or 0))
+                except: data.append(0)
+            datasets.append({'label': shorten_product(product), 'full_label': product, 'data': data, 'color': colors[i % len(colors)]})
+        return jsonify({'periods': periods, 'datasets': datasets, 'metric': metric, 'granularity': granularity})
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
