@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request, send_from_directory
+from werkzeug.exceptions import HTTPException
 
 from flask_cors import CORS
 
@@ -73,7 +74,12 @@ def handle_error(endpoint_name: str, e: Exception):
 
 @app.errorhandler(Exception)
 def handle_unhandled_exception(e):
-    """Catch any unhandled exception and return JSON instead of HTML 500."""
+    """Catch any unhandled exception and return JSON instead of HTML 500.
+    Must NOT swallow routing errors (404, 405, etc.) — those are HTTPException
+    subclasses too, and re-labeling a genuine 404 as 500 hides real missing-route
+    bugs behind a misleading 'internal error occurred' message."""
+    if isinstance(e, HTTPException):
+        return e
     logger.exception(f"Unhandled exception: {e}")
     return jsonify({"error": "An internal error occurred."}), 500
 
@@ -2460,6 +2466,26 @@ def kpi_digital():
     try:
         args = request.args
         return kpi_or_cases(args, 'sd.first_psp_review_date', METRIC_MAP['digital_lt'][0],
+            args.get('fetch_cases')=='true', exclude_outliers=args.get('exclude_outliers')=='true',
+            avg_digital_lt=float(args.get('avg_digital_lt',0)))
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+@app.route("/analytics/kpi/seg", methods=["GET"])
+def kpi_seg():
+    try:
+        args = request.args
+        return kpi_or_cases(args, 'sd.seg_review_date', METRIC_MAP['seg_lt'][0],
+            args.get('fetch_cases')=='true', exclude_outliers=args.get('exclude_outliers')=='true',
+            avg_digital_lt=float(args.get('avg_digital_lt',0)))
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+@app.route("/analytics/kpi/surgeon", methods=["GET"])
+def kpi_surgeon():
+    try:
+        args = request.args
+        return kpi_or_cases(args, 'sd.surgeon_approval_date', METRIC_MAP['surgeon_lt'][0],
             args.get('fetch_cases')=='true', exclude_outliers=args.get('exclude_outliers')=='true',
             avg_digital_lt=float(args.get('avg_digital_lt',0)))
     except Exception as e:
