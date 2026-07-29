@@ -1067,9 +1067,9 @@
 
           <!-- Lead Time by Step chart -->
           <div class="rpt-chart-card" id="csLtCard" style="position:relative;display:none;margin-bottom:16px">
-            <button class="copy-btn" onclick="copyRptChart('csLtChart','Lead Time by Process',event)"><i class="fa fa-copy"></i> Copy</button>
+            <button class="copy-btn" onclick="copyRptChart('csLtChart','Lead Time by Product',event)"><i class="fa fa-copy"></i> Copy</button>
             <button class="chart-settings-btn rcs-btn" id="rcs_btn_csLtChart" onclick="toggleRptSettings('csLtChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
-            <div class="rpt-chart-title"><i class="fa fa-clock"></i> Lead Time by Process</div>
+            <div class="rpt-chart-title"><i class="fa fa-clock"></i> Lead Time by Product</div>
             <div class="chart-settings-panel rcs-panel" id="rcs_panel_csLtChart">
               <div class="cs-field"><label>Color</label><input type="color" id="rcs_color_csLtChart" value="#7C3AED"/></div>
               <div class="cs-field"><label>Bar Width <span id="rcs_barwidth_val_csLtChart">70</span>%</label><input type="range" id="rcs_barwidth_csLtChart" min="10" max="100" value="70" oninput="document.getElementById('rcs_barwidth_val_csLtChart').textContent=this.value"/></div>
@@ -1081,7 +1081,7 @@
             </div>
             <div id="csLtEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csLtWrap" style="display:none"></div>
-            <div class="logic-caption">Avg days from a case entering a step to its next recorded transaction.</div>
+            <div class="logic-caption">Avg days from order entry (first transaction) to final step (last transaction), per product.</div>
           </div>
           </div><!-- /rpt-grid-2 row 2 -->
 
