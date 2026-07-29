@@ -1048,23 +1048,6 @@
           </div><!-- /rpt-grid-2 row 1 -->
 
           <div class="rpt-grid-2">
-          <!-- Process Counts chart -->
-          <div class="rpt-chart-card" id="csProcessCard" style="position:relative;display:none;margin-bottom:16px">
-            <button class="copy-btn" onclick="copyRptChart('csProcessChart','Completed Cases by Process',event)"><i class="fa fa-copy"></i> Copy</button>
-            <button class="chart-settings-btn rcs-btn" id="rcs_btn_csProcessChart" onclick="toggleRptSettings('csProcessChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
-            <div class="rpt-chart-title"><i class="fa fa-list-ol"></i> Completed Cases by Process</div>
-            <div class="chart-settings-panel rcs-panel" id="rcs_panel_csProcessChart">
-              <div class="cs-field"><label>Color</label><input type="color" id="rcs_color_csProcessChart" value="#005F72"/></div>
-              <div class="cs-field"><label>Bar Width <span id="rcs_barwidth_val_csProcessChart">70</span>%</label><input type="range" id="rcs_barwidth_csProcessChart" min="10" max="100" value="70" oninput="document.getElementById('rcs_barwidth_val_csProcessChart').textContent=this.value"/></div>
-              <div class="cs-field"><label>X Max</label><input type="number" id="rcs_ymax_csProcessChart" placeholder="auto" style="width:60px"/></div>
-              <div class="cs-field"><label>Show Labels</label><input type="checkbox" id="rcs_showlabels_csProcessChart" checked/></div>
-              <button class="cs-apply-btn" onclick="applyRptChartSettings('csProcessChart')"><i class="fa fa-check"></i> Apply</button>
-              <button class="cs-reset-btn" onclick="resetRptChartSettings('csProcessChart')"><i class="fa fa-undo"></i> Reset</button>
-            </div>
-            <div id="csProcessEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
-            <div class="rpt-chart-wrap" id="csProcessWrap" style="display:none"></div>
-          </div>
-
           <!-- Lead Time by Step chart -->
           <div class="rpt-chart-card" id="csLtCard" style="position:relative;display:none;margin-bottom:16px">
             <button class="copy-btn" onclick="copyRptChart('csLtChart','Lead Time by Product',event)"><i class="fa fa-copy"></i> Copy</button>
@@ -1083,9 +1066,7 @@
             <div class="rpt-chart-wrap" id="csLtWrap" style="display:none"></div>
             <div class="logic-caption">Avg days from order entry (first transaction) to final step (last transaction), per product.</div>
           </div>
-          </div><!-- /rpt-grid-2 row 2 -->
 
-          <div class="rpt-grid-2">
           <!-- Utilization chart -->
           <div class="rpt-chart-card" id="csUtilCard" style="position:relative;display:none;margin-bottom:16px">
             <button class="copy-btn" onclick="copyRptChart('csUtilChart','Camstar Utilization',event)"><i class="fa fa-copy"></i> Copy</button>
@@ -1115,7 +1096,9 @@
             <div id="csUtilEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csUtilWrap" style="display:none"></div>
           </div>
+          </div><!-- /rpt-grid-2 row 2 -->
 
+          <div class="rpt-grid-2">
           <!-- FPY chart -->
           <div class="rpt-chart-card" id="csFpyCard" style="position:relative;display:none;margin-bottom:16px">
             <button class="copy-btn" onclick="copyRptChart('csFpyChart','Camstar First Pass Yield',event)"><i class="fa fa-copy"></i> Copy</button>
@@ -1141,11 +1124,9 @@
             <div id="csFpyEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csFpyWrap" style="display:none"></div>
           </div>
-          </div><!-- /rpt-grid-2 row 3 -->
 
-          <div class="rpt-grid-2">
           <!-- OTD chart -->
-          <div class="rpt-chart-card" id="csOtdCard" style="position:relative;display:none;margin-bottom:0">
+          <div class="rpt-chart-card" id="csOtdCard" style="position:relative;display:none;margin-bottom:16px">
             <button class="copy-btn" onclick="copyRptChart('csOtdChart','Camstar On-Time Delivery',event)"><i class="fa fa-copy"></i> Copy</button>
             <button class="chart-settings-btn rcs-btn" id="rcs_btn_csOtdChart" onclick="toggleRptSettings('csOtdChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
             <div class="rpt-chart-title"><i class="fa fa-truck"></i> On-Time Delivery</div>
@@ -1165,6 +1146,33 @@
             </div>
             <div id="csOtdEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csOtdWrap" style="display:none"></div>
+          </div>
+          </div><!-- /rpt-grid-2 row 3 -->
+
+          <div class="rpt-grid-2">
+          <!-- Process Counts chart (moved to end; own product filter since it's packed across all products) -->
+          <div class="rpt-chart-card" id="csProcessCard" style="position:relative;display:none;margin-bottom:0">
+            <button class="copy-btn" onclick="copyRptChart('csProcessChart','Completed Cases by Process',event)"><i class="fa fa-copy"></i> Copy</button>
+            <button class="chart-settings-btn rcs-btn" id="rcs_btn_csProcessChart" onclick="toggleRptSettings('csProcessChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
+            <div class="rpt-chart-title"><i class="fa fa-list-ol"></i> Completed Cases by Process</div>
+            <div class="chart-settings-panel rcs-panel" id="rcs_panel_csProcessChart">
+              <div class="cs-field"><label>Color</label><input type="color" id="rcs_color_csProcessChart" value="#005F72"/></div>
+              <div class="cs-field"><label>Bar Width <span id="rcs_barwidth_val_csProcessChart">70</span>%</label><input type="range" id="rcs_barwidth_csProcessChart" min="10" max="100" value="70" oninput="document.getElementById('rcs_barwidth_val_csProcessChart').textContent=this.value"/></div>
+              <div class="cs-field"><label>X Max</label><input type="number" id="rcs_ymax_csProcessChart" placeholder="auto" style="width:60px"/></div>
+              <div class="cs-field"><label>Show Labels</label><input type="checkbox" id="rcs_showlabels_csProcessChart" checked/></div>
+              <button class="cs-apply-btn" onclick="applyRptChartSettings('csProcessChart')"><i class="fa fa-check"></i> Apply</button>
+              <button class="cs-reset-btn" onclick="resetRptChartSettings('csProcessChart')"><i class="fa fa-undo"></i> Reset</button>
+            </div>
+            <div class="chart-controls" style="margin-bottom:8px">
+              <div style="min-width:160px">
+                <select class="date-input" id="cs-process-product" onchange="loadCsProcessCounts()">
+                  <option value="">All Products</option>
+                </select>
+              </div>
+            </div>
+            <div id="csProcessEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csProcessWrap" style="display:none"></div>
+            <div class="logic-caption">Filter to one product to reduce clutter — this chart can get packed across all products at once.</div>
           </div>
           </div><!-- /rpt-grid-2 row 4 -->
 
@@ -2050,7 +2058,10 @@ let csProcessLastData=null;
 async function loadCsProcessCounts(){
   const el=document.getElementById('csProcessEmpty'); if(el) el.style.display='none';
   try{
-    const res = await fetch(`${API}/analytics/camstar/process-counts?${csParams('monthly')}`);
+    const params = new URLSearchParams(csParams('monthly'));
+    const localProduct = document.getElementById('cs-process-product')?.value;
+    if(localProduct){ params.set('product', localProduct); }
+    const res = await fetch(`${API}/analytics/camstar/process-counts?${params}`);
     const data = await res.json();
     if(data.error){toast('Process Counts error: '+data.error,'err');return;}
     csProcessLastData = data;
@@ -2339,6 +2350,14 @@ async function loadCsProducts(){
       data.products.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
     // Restore previous selection if still valid
     if(current && data.products.includes(current)) sel.value = current;
+    // Same live list for the Process Counts chart's own product filter
+    const procSel = document.getElementById('cs-process-product');
+    if(procSel){
+      const procCurrent = procSel.value;
+      procSel.innerHTML = '<option value="">All Products</option>' +
+        data.products.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+      if(procCurrent && data.products.includes(procCurrent)) procSel.value = procCurrent;
+    }
   } catch(e){ console.error('loadCsProducts error', e); }
 }
 
