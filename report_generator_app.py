@@ -23,6 +23,7 @@ import pandas as pd
 import anthropic
 
 import logging
+import requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -3083,6 +3084,71 @@ def process_efficiency_exclusions():
         })
     except Exception as e:
         return handle_error(request.endpoint, e)
+
+
+
+# ══════════════════════════════════════════════════════════════
+# Camstar cross-service proxy — forwards to the already-deployed camstar-app
+# instead of connecting to Postgres directly, keeping this app's clean
+# BigQuery-only dependency profile (no psycopg2). camstar_app.py also exposes
+# debug/write routes (wip_v2/_debug*, _fix_hip_anchor) that must NOT be
+# reachable through here, so this is an explicit whitelist, not a catch-all.
+# ══════════════════════════════════════════════════════════════
+
+CAMSTAR_SERVICE_URL = os.environ.get("CAMSTAR_SERVICE_URL", "").rstrip("/")
+
+def _camstar_proxy(path):
+    """Forwards the incoming request's query string to camstar-app and
+    returns its JSON response verbatim (same route names/params, so no
+    field-name translation needed — response shapes already match what
+    report_generator.html's existing JS expects)."""
+    if not CAMSTAR_SERVICE_URL:
+        return jsonify({"error": "CAMSTAR_SERVICE_URL not configured"}), 500
+    try:
+        resp = requests.get(f"{CAMSTAR_SERVICE_URL}{path}", params=request.args, timeout=30)
+        return jsonify(resp.json()), resp.status_code
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Camstar proxy error ({path}): {e}")
+        return jsonify({"error": f"Camstar service unreachable: {e}"}), 502
+    except ValueError as e:
+        logger.error(f"Camstar proxy non-JSON response ({path}): {e}")
+        return jsonify({"error": "Camstar service returned an invalid response"}), 502
+
+@app.route("/analytics/camstar/teams", methods=["GET"])
+def camstar_teams_proxy():
+    return _camstar_proxy("/analytics/camstar/teams")
+
+@app.route("/analytics/camstar/products", methods=["GET"])
+def camstar_products_proxy():
+    return _camstar_proxy("/analytics/camstar/products")
+
+@app.route("/analytics/camstar/steps", methods=["GET"])
+def camstar_steps_proxy():
+    return _camstar_proxy("/analytics/camstar/steps")
+
+@app.route("/analytics/camstar/users", methods=["GET"])
+def camstar_users_proxy():
+    return _camstar_proxy("/analytics/camstar/users")
+
+@app.route("/analytics/camstar/volume", methods=["GET"])
+def camstar_volume_proxy():
+    return _camstar_proxy("/analytics/camstar/volume")
+
+@app.route("/analytics/camstar/utilization", methods=["GET"])
+def camstar_utilization_proxy():
+    return _camstar_proxy("/analytics/camstar/utilization")
+
+@app.route("/analytics/camstar/fpy", methods=["GET"])
+def camstar_fpy_proxy():
+    return _camstar_proxy("/analytics/camstar/fpy")
+
+@app.route("/analytics/camstar/otd", methods=["GET"])
+def camstar_otd_proxy():
+    return _camstar_proxy("/analytics/camstar/otd")
+
+@app.route("/analytics/camstar/wip", methods=["GET"])
+def camstar_wip_proxy():
+    return _camstar_proxy("/analytics/camstar/wip")
 
 
 if __name__ == "__main__":
