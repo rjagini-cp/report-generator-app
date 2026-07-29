@@ -462,6 +462,7 @@
   <div class="sb-section">Dashboard</div>
   <nav><ul>
     <li><a href="https://restor3dindia.netlify.app/" title="Dashboard"><i class="fa fa-home"></i><span>Dashboard</span></a></li>
+    <li><a href="https://camstar-app-production.up.railway.app/camstar.html" target="_blank" rel="noopener" title="Camstar Dashboard"><i class="fa fa-external-link-alt"></i><span>Camstar</span></a></li>
     <li style="display:none"><a href="data-genie.html" class="active"><i class="fa fa-bolt"></i>Data Genie</a></li>
     <li style="display:none"><div class="sb-item" onclick="toggleSub(this)"><i class="fa fa-chart-pie icon"></i>Overview<i class="fa fa-chevron-down sb-arrow"></i></div>
       <ul class="sb-sub">
@@ -517,19 +518,13 @@
     <!-- ══════════════════════════════════════════════════════ -->
     <div class="report-card" id="reportSection">
       <!-- Collapsible header -->
-      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #008EAA;margin-bottom:10px;user-select:none">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #008EAA;margin-bottom:10px;cursor:pointer;user-select:none" onclick="toggleReportSection()">
         <i class="fa fa-file-chart-column" style="color:#008EAA"></i>
-        <span style="font-weight:700;color:#008EAA;font-size:13px">Digital Production Report Generator</span>
+        <span style="font-weight:700;color:#008EAA;font-size:13px;flex:1">Digital Production Report Generator</span>
+        <i class="fa fa-chevron-down" id="reportChevron" style="color:var(--text-4);transition:transform .2s"></i>
       </div>
-      <!-- Hidden — not part of the visible UI. loadConfig() unconditionally
-           writes to #configStatus with no null-check; this exists purely so
-           that write doesn't throw and kill the rest of loadConfig() (which
-           is what populates the real, visible Product Name/Case Type lists
-           via applyConfig() -> buildRptProductList()). Do not remove without
-           also adding a null-check to loadConfig() first. -->
-      <span id="configStatus" style="display:none"></span>
 
-      <div class="report-filter-body open" id="reportFilterBody">
+      <div class="report-filter-body" id="reportFilterBody" style="display:none">
         <!-- Date presets (own namespace: rpt-) -->
         <div class="filters-hdr" style="margin-bottom:8px">
           <span class="filters-title"><i class="fa fa-calendar-alt"></i> Report Filters</span>
@@ -540,7 +535,6 @@
         <div class="date-presets" id="rptDatePresets">
           <select class="date-input" id="rptWeeklyPreset" style="width:auto;height:auto" onchange="if(this.value)setRptDatePreset(this,parseInt(this.value))">
             <option value="">Weekly Range...</option>
-            <option value="7">Last 7 Days</option>
             <option value="14">Last 2 Weeks</option>
             <option value="28">Last 4 Weeks</option>
             <option value="56">Last 8 Weeks</option>
@@ -549,9 +543,6 @@
           <span class="date-preset" onclick="setRptDatePreset(this,365)">Last 12 Months</span>
           <span class="date-preset" onclick="setRptMonthPicker(this)">Select Month</span>
           <span class="date-preset" onclick="setRptCustomRange(this)">Custom Range</span>
-          <select id="groupSelect" onchange="onGroupSelect(this.value)" title="Selecting a group auto-checks its matching engineers in More Filters" style="height:auto;padding:5px 10px;border:1px solid var(--border-dark);border-radius:5px;font-size:11px;background:var(--bg-input);color:var(--text-2)">
-            <option value="">Group...</option>
-          </select>
         </div>
         <div class="month-picker-row" id="rptMonthPickerRow"><select class="date-input" id="rptMonthPicker" onchange="applyRptMonthPicker()"><option value="">Select month...</option></select></div>
         <div class="custom-date-row" id="rptCustomDateRow">
@@ -589,7 +580,7 @@
           </div>
         </div>
 
-        <!-- More Filters (rarely used) — Surgeon, Facility, State, Case Flags, Process Step, Group, Engineer -->
+        <!-- More Filters (rarely used) — Surgeon, Facility, State, Case Flags, collapsed by default -->
         <div class="adv-toggle" id="rptMoreToggle" onclick="toggleRptMoreFilters()" style="margin-top:8px"><i class="fa fa-chevron-down"></i><span>More Filters</span></div>
         <div class="adv-filters" id="rptMoreFilters" style="display:none">
           <div class="filter-grid" style="margin-top:8px">
@@ -604,23 +595,29 @@
               <button class="ms-btn" onclick="toggleDD('rptFlags')"><span class="ms-btn-text" id="lbl-rptFlags">All Cases</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptFlags" onclick="clearDD('rptFlags',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
               <div class="ms-dropdown" id="dd-rptFlags"><div class="ms-list" id="list-rptFlags"></div><div class="ms-footer"><span class="ms-count" id="cnt-rptFlags">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptFlags',event)">Clear</button></div></div></div>
             </div>
-            <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
-              <div style="flex:1">
-                <div class="ms-label">Process Step</div>
-                <button class="ms-btn" onclick="toggleDD('rptStep')"><span class="ms-btn-text" id="lbl-rptStep">Load steps →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStep" onclick="clearDD('rptStep',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-                <div class="ms-dropdown" id="dd-rptStep"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStep',this.value)"/></div><div class="ms-list" id="list-rptStep"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStep">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStep',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStep')">All</button></div></div></div>
-              </div>
-              <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadStepsBtn" onclick="loadRptSteps()"><i class="fa fa-sync"></i> Load</button>
-            </div>
-            <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
-              <div style="flex:1">
-                <div class="ms-label">Engineer</div>
-                <button class="ms-btn" onclick="toggleDD('rptStepUser')"><span class="ms-btn-text" id="lbl-rptStepUser">Load users →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStepUser" onclick="clearDD('rptStepUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-                <div class="ms-dropdown" id="dd-rptStepUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStepUser',this.value)"/></div><div class="ms-list" id="list-rptStepUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStepUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStepUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStepUser')">All</button></div></div></div>
-              </div>
-              <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadUsersBtn" onclick="loadRptUsers()"><i class="fa fa-sync"></i> Load</button>
-            </div>
           </div>
+        </div>
+
+        <!-- Step + Engineer filter — shown only when Process Efficiency or Exclusion Breakdown is checked -->
+        <div id="rptUserFilterRow" style="display:none;margin-top:8px;padding:10px 12px;background:var(--accent-bg);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:10px"><i class="fa fa-user-cog"></i> Efficiency Filters <span style="font-size:10px;font-weight:400;color:var(--text-4)">(for Process Efficiency &amp; Exclusion charts)</span></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <!-- Process Step dropdown — identical to R3ID -->
+            <div class="ms-wrap" style="flex:1;min-width:180px">
+              <div class="ms-label">Process Step</div>
+              <button class="ms-btn" onclick="toggleDD('rptStep')"><span class="ms-btn-text" id="lbl-rptStep">Load steps →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStep" onclick="clearDD('rptStep',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+              <div class="ms-dropdown" id="dd-rptStep"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStep',this.value)"/></div><div class="ms-list" id="list-rptStep"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStep">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStep',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStep')">All</button></div></div></div>
+            </div>
+            <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadStepsBtn" onclick="loadRptSteps()"><i class="fa fa-sync"></i> Load</button>
+            <!-- Engineer (User) dropdown — identical to R3ID -->
+            <div class="ms-wrap" style="flex:1;min-width:180px">
+              <div class="ms-label">Engineer</div>
+              <button class="ms-btn" onclick="toggleDD('rptStepUser')"><span class="ms-btn-text" id="lbl-rptStepUser">Load users →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptStepUser" onclick="clearDD('rptStepUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+              <div class="ms-dropdown" id="dd-rptStepUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptStepUser',this.value)"/></div><div class="ms-list" id="list-rptStepUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptStepUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptStepUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptStepUser')">All</button></div></div></div>
+            </div>
+            <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="rptLoadUsersBtn" onclick="loadRptUsers()"><i class="fa fa-sync"></i> Load</button>
+          </div>
+          <div style="font-size:10px;color:var(--text-4);margin-top:8px"><i class="fa fa-info-circle"></i> Select step first, then load engineers. Leave both blank = all steps &amp; all engineers.</div>
         </div>
 
         <!-- Chart selector -->
@@ -914,12 +911,253 @@
       </div><!-- /report-filter-body -->
     </div><!-- /report-card -->
 
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- CAMSTAR PRODUCTION REPORT SECTION (collapsed by default) -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="report-card" id="camstarSection" style="margin-top:24px">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #7C3AED;margin-bottom:10px;cursor:pointer;user-select:none" onclick="toggleCamstarSection()">
+        <i class="fa fa-industry" style="color:#7C3AED"></i>
+        <span style="font-weight:700;color:#7C3AED;font-size:13px;flex:1">Camstar Production Report</span>
+        <i class="fa fa-chevron-down" id="camstarChevron" style="color:var(--text-4);transition:transform .2s"></i>
+      </div>
+
+      <div id="camstarFilterBody" style="display:none">
+        <div class="filters-hdr" style="margin-bottom:8px"><i class="fa fa-calendar"></i> Report Filters</div>
+        <div class="filter-grid" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+          <div style="min-width:160px">
+            <div class="ms-label">Product Group</div>
+            <select class="date-input" id="cs-product-group" onchange="onCsProductGroupChange()">
+              <option value="">All</option>
+              <option value="Cleared Knee">Cleared Knee</option>
+              <option value="Cleared Hip">Cleared Hip</option>
+            </select>
+          </div>
+          <div style="min-width:160px">
+            <div class="ms-label">Product Line</div>
+            <select class="date-input" id="cs-product-line"><option value="">All</option></select>
+          </div>
+          <div style="min-width:160px">
+            <div class="ms-label">Team</div>
+            <select class="date-input" id="cs-team" onchange="onCsTeamChange()"><option value="">All</option></select>
+          </div>
+          <div>
+            <div class="ms-label">From</div>
+            <input type="date" class="date-input" id="cs-date-from"/>
+          </div>
+          <div>
+            <div class="ms-label">To</div>
+            <input type="date" class="date-input" id="cs-date-to"/>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+          <div class="ms-wrap" style="flex:1;min-width:180px">
+            <div class="ms-label">Process Step</div>
+            <button class="ms-btn" onclick="toggleDD('csStep')"><span class="ms-btn-text" id="lbl-csStep">Load steps →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-csStep" onclick="clearDD('csStep',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+            <div class="ms-dropdown" id="dd-csStep"><div class="ms-search"><input placeholder="Search..." oninput="filterList('csStep',this.value)"/></div><div class="ms-list" id="list-csStep"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-csStep">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('csStep',event)">Clear</button><button class="ms-selectall" onclick="selectAll('csStep')">All</button></div></div></div>
+          </div>
+          <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="csLoadStepsBtn" onclick="loadCsSteps()"><i class="fa fa-sync"></i> Load</button>
+          <div class="ms-wrap" style="flex:1;min-width:180px">
+            <div class="ms-label">Engineer</div>
+            <button class="ms-btn" onclick="toggleDD('csUser')"><span class="ms-btn-text" id="lbl-csUser">Load users →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-csUser" onclick="clearDD('csUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+            <div class="ms-dropdown" id="dd-csUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('csUser',this.value)"/></div><div class="ms-list" id="list-csUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-csUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('csUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('csUser')">All</button></div></div></div>
+          </div>
+          <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="csLoadUsersBtn" onclick="loadCsUsers()"><i class="fa fa-sync"></i> Load</button>
+        </div>
+
+        <div style="font-weight:700;font-size:12px;color:var(--text-2);margin-bottom:8px">Charts to Include</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">
+          <label><input type="checkbox" id="csChk_vol" checked/> Volume</label>
+          <label><input type="checkbox" id="csChk_wip" checked/> WIP</label>
+          <label><input type="checkbox" id="csChk_util" checked/> Utilization</label>
+          <label><input type="checkbox" id="csChk_fpy" checked/> FPY</label>
+          <label><input type="checkbox" id="csChk_otd" checked/> OTD</label>
+        </div>
+
+        <button class="rpt-generate-btn" id="csGenerateBtn" onclick="generateCamstarReport()">
+          <i class="fa fa-bolt"></i> Generate Camstar Report
+        </button>
+
+        <div id="camstarOutput" style="display:none;margin-top:20px">
+
+          <!-- WIP tiles -->
+          <div class="rpt-section-hdr"><i class="fa fa-tasks"></i> WIP (Current)</div>
+          <div class="rpt-kpi-row" style="margin-bottom:14px">
+            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Implant WIP</div><div class="rpt-kpi-val" id="cs-wip-total-imp">—</div><div class="rpt-kpi-sub">Across all products</div></div>
+            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Jig WIP</div><div class="rpt-kpi-val" id="cs-wip-total-jig">—</div><div class="rpt-kpi-sub">Across all products</div></div>
+          </div>
+          <div id="csWipTiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px"></div>
+
+          <!-- Volume chart -->
+          <div class="rpt-chart-card" id="csVolCard" style="position:relative;display:none;margin-bottom:16px">
+            <div class="rpt-chart-title"><i class="fa fa-chart-bar"></i> Volume</div>
+            <div class="rpt-kpi-row" style="margin-bottom:10px">
+              <div class="rpt-kpi"><div class="rpt-kpi-lbl">Total Volume</div><div class="rpt-kpi-val" id="cs-vol-total">—</div><div class="rpt-kpi-sub" id="cs-vol-sub">—</div></div>
+            </div>
+            <div class="chart-controls" style="margin-bottom:8px">
+              <button class="chart-toggle" onclick="setCsGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle active" onclick="setCsGranularity('monthly',this);loadCamstarVolume()">Monthly</button>
+              <button class="kpi-calc-btn" id="csVolFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('vol')"><i class="fa fa-list"></i> View Cases</button>
+            </div>
+            <div id="csVolEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csVolWrap" style="display:none"></div>
+          </div>
+
+          <!-- Utilization chart -->
+          <div class="rpt-chart-card" id="csUtilCard" style="position:relative;display:none;margin-bottom:16px">
+            <div class="rpt-chart-title"><i class="fa fa-users"></i> Utilization</div>
+            <div class="rpt-kpi-row" style="margin-bottom:10px">
+              <div class="rpt-kpi"><div class="rpt-kpi-lbl" id="cs-util-avg-label">Team Avg</div><div class="rpt-kpi-val" id="cs-util-avg">—</div><div class="rpt-kpi-sub" id="cs-util-sub">—</div></div>
+            </div>
+            <div class="chart-controls" style="margin-bottom:8px">
+              <button class="chart-toggle active" onclick="setCsUtilView('trend',this)">Trend</button>
+              <button class="chart-toggle" onclick="setCsUtilView('bar',this)">By User</button>
+            </div>
+            <div class="chart-controls" style="margin-bottom:8px">
+              <button class="chart-toggle" onclick="setCsUtilGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle active" onclick="setCsUtilGranularity('monthly',this);loadCamstarUtil()">Monthly</button>
+              <button class="chart-toggle" onclick="toggleCsUtilProductivity(this)">Productivity Mode</button>
+              <button class="kpi-calc-btn" id="csUtilFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('util')"><i class="fa fa-list"></i> View Cases</button>
+            </div>
+            <div id="csUtilEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csUtilWrap" style="display:none"></div>
+          </div>
+
+          <!-- FPY chart -->
+          <div class="rpt-chart-card" id="csFpyCard" style="position:relative;display:none;margin-bottom:16px">
+            <div class="rpt-chart-title"><i class="fa fa-check-circle"></i> First Pass Yield</div>
+            <div class="rpt-kpi-row" style="margin-bottom:10px">
+              <div class="rpt-kpi"><div class="rpt-kpi-lbl">Team Avg FPY</div><div class="rpt-kpi-val" id="cs-fpy-avg">—</div><div class="rpt-kpi-sub" id="cs-fpy-sub">—</div></div>
+            </div>
+            <div class="chart-controls" style="margin-bottom:8px">
+              <button class="chart-toggle active" onclick="setCsFpyView('trend',this)">Trend</button>
+              <button class="chart-toggle" onclick="setCsFpyView('bar',this)">By User</button>
+              <button class="chart-toggle" onclick="setCsFpyGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle active" onclick="setCsFpyGranularity('monthly',this);loadCamstarFpy()">Monthly</button>
+              <button class="kpi-calc-btn" id="csFpyFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('fpy')"><i class="fa fa-list"></i> View Cases</button>
+            </div>
+            <div id="csFpyEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csFpyWrap" style="display:none"></div>
+          </div>
+
+          <!-- OTD chart -->
+          <div class="rpt-chart-card" id="csOtdCard" style="position:relative;display:none;margin-bottom:0">
+            <div class="rpt-chart-title"><i class="fa fa-truck"></i> On-Time Delivery</div>
+            <div class="rpt-kpi-row" style="margin-bottom:10px">
+              <div class="rpt-kpi"><div class="rpt-kpi-lbl">Team OTD</div><div class="rpt-kpi-val" id="cs-otd-avg">—</div><div class="rpt-kpi-sub" id="cs-otd-sub">—</div></div>
+            </div>
+            <div class="chart-controls" style="margin-bottom:8px">
+              <button class="chart-toggle" onclick="setCsOtdGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle active" onclick="setCsOtdGranularity('monthly',this);loadCsOtd()">Monthly</button>
+            </div>
+            <div id="csOtdEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csOtdWrap" style="display:none"></div>
+          </div>
+
+        </div><!-- /camstarOutput -->
+      </div><!-- /camstarFilterBody -->
+    </div><!-- /camstarSection -->
+
+    <!-- FILTERS -->
+    <div class="filters-card" style="border-left:4px solid var(--accent-dark);display:none">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid var(--accent-dark);margin-bottom:10px;cursor:pointer;user-select:none" onclick="toggleR3IDFilters()">
+        <i class="fa fa-filter" style="color:var(--accent-dark)"></i>
+        <span style="font-weight:700;color:var(--accent-dark);font-size:13px">R3ID Filters (Customs, TAR, rTSA etc.)</span>
+        <i class="fa fa-chevron-down" id="r3idFilterChevron" style="color:var(--text-4);transition:transform .2s"></i>
+      </div>
+      <div id="r3idFilterBody" style="display:none">
+      <div class="filters-hdr">
+        <span class="filters-title"><i class="fa fa-filter"></i> Filters <span id="configStatus" style="font-size:9px;color:var(--text-4);font-weight:400;margin-left:4px"></span></span>
+        <div class="filter-actions">
+          <button class="btn-sm btn-ghost" onclick="clearAllFilters()"><i class="fa fa-times"></i> Clear All</button>
+          <button class="btn-sm btn-accent" onclick="applyFilters()"><i class="fa fa-check"></i> Apply</button>
+        </div>
+      </div>
+      <div class="date-presets">
+        <span class="date-preset" onclick="setDatePreset(this,7)">Last 7 Days</span>
+        <span class="date-preset" onclick="setDatePreset(this,14)">Last 2 Weeks</span>
+        <span class="date-preset" onclick="setDatePreset(this,28)">Last 4 Weeks</span>
+        <span class="date-preset" onclick="setDatePreset(this,56)">Last 8 Weeks</span>
+        <span class="date-preset" onclick="setDatePreset(this,180)">Last 6 Months</span>
+        <span class="date-preset" onclick="setDatePreset(this,365)">Last 12 Months</span>
+        <span class="date-preset" onclick="setAllTime(this)">All Time</span>
+        <span class="date-preset" onclick="setMonthPicker(this)">Select Month</span>
+        <span class="date-preset" onclick="setCustomRange(this)">Custom Range</span>
+      </div>
+      <div class="month-picker-row" id="monthPickerRow"><select class="date-input" id="monthPicker" onchange="applyMonthPicker()"><option value="">Select month...</option></select></div>
+      <div class="custom-date-row" id="customDateRow">
+        <input type="date" class="date-input" id="dateFrom"/>
+        <input type="date" class="date-input" id="dateTo"/>
+      </div>
+      <div class="filter-grid">
+        <div class="ms-wrap">
+          <div class="ms-label">Product Group</div>
+          <button class="ms-btn" onclick="toggleDD('productGroup')"><span class="ms-btn-text" id="lbl-productGroup">All Groups</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-productGroup" onclick="clearDD('productGroup',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+          <div class="ms-dropdown" id="dd-productGroup"><div class="ms-search"><input placeholder="Search groups..." oninput="filterList('productGroup',this.value)"/></div><div class="ms-list" id="list-productGroup"></div><div class="ms-footer"><span class="ms-count" id="cnt-productGroup">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('productGroup',event)">Clear</button><button class="ms-selectall" onclick="selectAll('productGroup')">All</button></div></div></div>
+        </div>
+        <div class="ms-wrap">
+          <div class="ms-label">Product Name</div>
+          <button class="ms-btn" onclick="toggleDD('productName')"><span class="ms-btn-text" id="lbl-productName">All Products</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-productName" onclick="clearDD('productName',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+          <div class="ms-dropdown" id="dd-productName"><div class="ms-search"><input placeholder="Search products..." oninput="filterList('productName',this.value)"/></div><div class="ms-list" id="list-productName"></div><div class="ms-footer"><span class="ms-count" id="cnt-productName">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('productName',event)">Clear</button><button class="ms-selectall" onclick="selectAll('productName')">All</button></div></div></div>
+        </div>
+        <div class="ms-wrap">
+          <div class="ms-label">Case Type</div>
+          <button class="ms-btn" onclick="toggleDD('caseType')"><span class="ms-btn-text" id="lbl-caseType">All Types</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-caseType" onclick="clearDD('caseType',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+          <div class="ms-dropdown" id="dd-caseType"><div class="ms-search"><input placeholder="Search..." oninput="filterList('caseType',this.value)"/></div><div class="ms-list" id="list-caseType"><div style="padding:10px;color:var(--text-4);font-size:11px">Loading...</div></div><div class="ms-footer"><span class="ms-count" id="cnt-caseType">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('caseType',event)">Clear</button><button class="ms-selectall" onclick="selectAll('caseType')">All</button></div></div></div>
+        </div>
+        <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
+          <div style="flex:1">
+            <div class="ms-label">Process Step</div>
+            <button class="ms-btn" onclick="toggleDD('step')"><span class="ms-btn-text" id="lbl-step">Load steps →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-step" onclick="clearDD('step',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+            <div class="ms-dropdown" id="dd-step"><div class="ms-search"><input placeholder="Search..." oninput="filterList('step',this.value)"/></div><div class="ms-list" id="list-step"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-step">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('step',event)">Clear</button><button class="ms-selectall" onclick="selectAll('step')">All</button></div></div></div>
+          </div>
+          <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="loadStepsBtn" onclick="loadSteps()"><i class="fa fa-sync"></i> Load</button>
+        </div>
+        <div class="ms-wrap" style="display:flex;gap:6px;align-items:flex-end">
+          <div style="flex:1">
+            <div class="ms-label">User</div>
+            <button class="ms-btn" onclick="toggleDD('stepUser')"><span class="ms-btn-text" id="lbl-stepUser">Load users →</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-stepUser" onclick="clearDD('stepUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+            <div class="ms-dropdown" id="dd-stepUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('stepUser',this.value)"/></div><div class="ms-list" id="list-stepUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Click Load to populate</div></div><div class="ms-footer"><span class="ms-count" id="cnt-stepUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('stepUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('stepUser')">All</button></div></div></div>
+          </div>
+          <button class="kpi-calc-btn" style="height:30px;width:auto;padding:0 10px;margin:0" id="loadUsersBtn" onclick="loadUsers()"><i class="fa fa-sync"></i> Load</button>
+        </div>
+        <div class="ms-wrap" style="margin-top:-4px">
+          <div class="ms-label" style="font-size:9px;color:var(--text-4)">User Role <span style="font-weight:400;text-transform:none;letter-spacing:0">(applies when a user is selected)</span></div>
+          <div style="display:flex;gap:4px">
+            <button class="chart-toggle active" id="userRoleWorkerBtn" onclick="setUserRole('worker',this)" title="Show cases this user worked on as a designer (WORKER signoffs)">Designed</button>
+            <button class="chart-toggle" id="userRoleReviewerBtn" onclick="setUserRole('reviewer',this)" title="Show cases this user reviewed (REVIEWER/APPROVER signoffs)">Reviewed</button>
+          </div>
+        </div>
+      </div>
+      <div class="adv-toggle" id="advToggle" onclick="toggleAdv()"><i class="fa fa-chevron-down"></i><span>Advanced Filters</span></div>
+      <div class="adv-filters" id="advFilters">
+        <div class="filter-grid">
+          <div class="ms-wrap">
+            <div class="ms-label">Side</div>
+            <button class="ms-btn" onclick="toggleDD('laterality')"><span class="ms-btn-text" id="lbl-laterality">All</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-laterality" onclick="clearDD('laterality',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+            <div class="ms-dropdown" id="dd-laterality"><div class="ms-search"><input placeholder="Search..." oninput="filterList('laterality',this.value)"/></div><div class="ms-list" id="list-laterality"></div><div class="ms-footer"><span class="ms-count" id="cnt-laterality">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('laterality',event)">Clear</button><button class="ms-selectall" onclick="selectAll('laterality')">All</button></div></div></div>
+          </div>
+          <div class="ms-wrap"><div class="ms-label">Facility</div><input type="text" class="text-filter" id="f-facility" placeholder="e.g. Kaiser"/></div>
+          <div class="ms-wrap"><div class="ms-label">State</div><input type="text" class="text-filter" id="f-state" placeholder="e.g. CA"/></div>
+          <div class="ms-wrap">
+            <div class="ms-label">Case Flags</div>
+            <button class="ms-btn" onclick="toggleDD('flags')"><span class="ms-btn-text" id="lbl-flags">All Cases</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-flags" onclick="clearDD('flags',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+            <div class="ms-dropdown" id="dd-flags"><div class="ms-list" id="list-flags"></div><div class="ms-footer"><span class="ms-count" id="cnt-flags">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('flags',event)">Clear</button></div></div></div>
+          </div>
+          <div class="ms-wrap"><div class="ms-label">Surgeon (Last Name)</div><input type="text" class="text-filter" id="f-surgeon" placeholder="e.g. Smith"/></div>
+        </div>
+      </div>
+      </div><!-- /r3idFilterBody -->
+    </div>
+
     <!-- CASE LIST — third section, always visible, outside R3ID and CamStar -->
     <div class="filters-card" style="margin-top:24px;border-left:4px solid #005F72">
-      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #005F72;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 0 8px 0;border-bottom:3px solid #005F72;margin-bottom:10px;cursor:pointer;user-select:none" onclick="toggleCaseListSection()">
         <i class="fa fa-table" style="color:#005F72"></i>
-        <span style="font-weight:700;color:#005F72;font-size:13px">Case List</span>
+        <span style="font-weight:700;color:#005F72;font-size:13px;flex:1">Case List</span>
+        <i class="fa fa-chevron-down" id="caseListChevron" style="color:var(--text-4);transition:transform .2s"></i>
       </div>
+      <div id="caseListBody" style="display:none">
     <div class="table-card" id="tableCard" style="margin-bottom:0;border:none;padding:0;box-shadow:none">
       <div class="table-hdr">
         <div>
@@ -959,6 +1197,7 @@
         <div class="pagination" id="pagination"></div>
       </div>
     </div><!-- /table-card -->
+    </div><!-- /caseListBody -->
     </div><!-- /case list filters-card -->
 
 
@@ -1046,38 +1285,6 @@ async function loadSteps(){
     }
   }catch(e){toast('Error loading steps','err');}
   finally{btn.disabled=false;btn.innerHTML='<i class="fa fa-sync"></i> Load';}
-}
-
-let USER_GROUPS_LIVE = {};
-
-async function loadUserGroups(){
-  try{
-    const res = await fetch(`${API}/analytics/user-groups`);
-    USER_GROUPS_LIVE = await res.json();
-    const sel = document.getElementById('groupSelect');
-    if(!sel) return;
-    const teams = Object.keys(USER_GROUPS_LIVE.bigquery || {}).sort();
-    sel.innerHTML = '<option value="">— Select a group —</option>' +
-      teams.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  }catch(e){ console.error('loadUserGroups error', e); }
-}
-
-async function onGroupSelect(teamName){
-  if(!teamName) return;
-  if(!document.querySelectorAll('#list-rptStepUser input[type=checkbox]').length){
-    await loadRptUsers();
-  }
-  clearDD('rptStepUser', null);
-  const members = (USER_GROUPS_LIVE.bigquery || {})[teamName] || [];
-  document.getElementById('list-rptStepUser')?.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-    if(members.includes(cb.value)){
-      cb.checked = true;
-      onCheck('rptStepUser', cb.value, true);
-    }
-  });
-  if(!members.length){
-    toast(`No known users in "${teamName}" yet`, 'info');
-  }
 }
 
 async function loadUsers(){
@@ -1611,6 +1818,49 @@ async function loadCsUsers(){
     }
   }catch(e){toast('Error loading CamStar users','err');}
   finally{btn.disabled=false;btn.innerHTML='<i class="fa fa-sync"></i> Load';}
+}
+
+async function loadCsTeams(){
+  try{
+    const res = await fetch(`${API}/analytics/camstar/teams`);
+    const data = await res.json();
+    if(!data.teams) return;
+    const sel = document.getElementById('cs-team');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All</option>' +
+      data.teams.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    if(current && data.teams.includes(current)) sel.value = current;
+  } catch(e){ console.error('loadCsTeams error', e); }
+}
+
+async function generateCamstarReport(){
+  const btn = document.getElementById('csGenerateBtn');
+  btn.disabled = true;
+  const output = document.getElementById('camstarOutput');
+  output.style.display = 'block';
+
+  const doVol  = document.getElementById('csChk_vol').checked;
+  const doWip  = document.getElementById('csChk_wip').checked;
+  const doUtil = document.getElementById('csChk_util').checked;
+  const doFpy  = document.getElementById('csChk_fpy').checked;
+  const doOtd  = document.getElementById('csChk_otd').checked;
+
+  document.getElementById('csVolCard').style.display  = doVol  ? 'block' : 'none';
+  document.getElementById('csUtilCard').style.display = doUtil ? 'block' : 'none';
+  document.getElementById('csFpyCard').style.display  = doFpy  ? 'block' : 'none';
+  document.getElementById('csOtdCard').style.display  = doOtd  ? 'block' : 'none';
+
+  try{
+    const jobs = [];
+    if(doWip)  jobs.push(loadCsWip());
+    if(doVol)  jobs.push(loadCamstarVolume());
+    if(doUtil) jobs.push(loadCamstarUtil());
+    if(doFpy)  jobs.push(loadCamstarFpy());
+    if(doOtd)  jobs.push(loadCsOtd());
+    await Promise.all(jobs);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function fetchCsCases(type){
@@ -2364,7 +2614,6 @@ document.addEventListener('DOMContentLoaded',async()=>{
   populateMonthPicker();buildStaticLists();  await loadConfig();
   applyInitialCollapseState();
   loadCaseTypes();
-  loadUserGroups();
   document.addEventListener('click',e=>{
     document.querySelectorAll('.ms-dropdown.open').forEach(dd=>{if(!dd.closest('.ms-wrap').contains(e.target)){dd.classList.remove('open');dd.previousElementSibling.classList.remove('open');}});
     document.querySelectorAll('.col-filter-dropdown.open').forEach(dd=>{if(!dd.closest('.col-filter-wrap').contains(e.target))dd.classList.remove('open');});
@@ -2432,7 +2681,7 @@ function refreshProductList(){
   if(searchInput&&searchInput.value)filterList('productName',searchInput.value);
 }
 function buildStaticLists(){buildList('laterality',LAT_OPTS);buildList('flags',FLAG_OPTS);}
-function populateMonthPicker(){const sel=document.getElementById('monthPicker'),now=new Date();for(let i=0;i<18;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');if(sel)sel.innerHTML+=`<option value="${y}-${m}">${d.toLocaleString('default',{month:'long',year:'numeric'})}</option>`;}}
+function populateMonthPicker(){const sel=document.getElementById('monthPicker'),now=new Date();for(let i=0;i<18;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');sel.innerHTML+=`<option value="${y}-${m}">${d.toLocaleString('default',{month:'long',year:'numeric'})}</option>`;}}
 function populateCsMonthPicker(){const sel=document.getElementById('cs-month-picker'),now=new Date();for(let i=0;i<18;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');sel.innerHTML+=`<option value="${y}-${m}">${d.toLocaleString('default',{month:'long',year:'numeric'})}</option>`;}}
 function applyCsMonthPicker(){
   const val=document.getElementById('cs-month-picker').value;if(!val)return;
@@ -2805,7 +3054,7 @@ function applyAllTableFilters(){
   renderTable();
 }
 
-async function fetchAllCases(){const btn=document.getElementById('fetchBtn');btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i> Fetching...';isOnHoldTable=false;showLoading('Fetching cases...');try{const res=await fetch(`${API}/analytics/cases?${buildRptQS()}`);const data=res.ok?await res.json():null;if(data?.cases)loadCasesIntoTable(data.cases,'All Cases',`${data.cases.length} cases - created in date range`,false);}catch(e){toast('Error','err');}finally{btn.disabled=false;btn.innerHTML='<i class="fa fa-search"></i> Fetch All Cases';hideLoading();}}
+async function fetchAllCases(){const btn=document.getElementById('fetchBtn');btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i> Fetching...';isOnHoldTable=false;showLoading('Fetching cases...');try{const res=await fetch(`${API}/analytics/cases?${buildQS()}`);const data=res.ok?await res.json():null;if(data?.cases)loadCasesIntoTable(data.cases,'All Cases',`${data.cases.length} cases - created in date range`,false);}catch(e){toast('Error','err');}finally{btn.disabled=false;btn.innerHTML='<i class="fa fa-search"></i> Fetch All Cases';hideLoading();}}
 async function fetchNlqCases(){if(!lastNlqRows?.length)return;const labels=lastNlqRows.map(r=>r.label).filter(Boolean);if(!labels.length)return;isOnHoldTable=false;showLoading('Fetching cases...');try{const res=await fetch(`${API}/analytics/cases?${buildQS({product:labels.join(',')})}`);const data=res.ok?await res.json():null;if(data?.cases)loadCasesIntoTable(data.cases,'NLQ Result Cases',`${data.count} cases`,false);}catch(e){toast('Error','err');}finally{hideLoading();}}
 
 function notesCell(c){
@@ -3109,7 +3358,7 @@ function toast(msg,type='ok'){const c=document.getElementById('toastContainer'),
 //  REPORT GENERATION
 //  Config: DataGenie_Report_Config.yaml
 // ══════════════════════════════════════════════════════════════
-let rptCollapsed = false;
+let rptCollapsed = true;
 let rptDateFrom = '', rptDateTo = '', rptIsAllTime = false;
 const RPT_SEL = {rptProductGroup:[], rptProductName:[], rptCaseType:[], rptFlags:[], rptStep:[], rptStepUser:[]};
 SEL.rptProductGroup = RPT_SEL.rptProductGroup;
@@ -3172,15 +3421,32 @@ function getRptChartSettings(cid){
   };
 }
 
+function toggleCollapsibleSection(bodyId, chevronId, onFirstOpen){
+  const body    = document.getElementById(bodyId);
+  const chevron = document.getElementById(chevronId);
+  if(!body) return;
+  const collapsed = body.style.display !== 'none';   // currently open -> collapsing now
+  body.style.display = collapsed ? 'none' : 'block';
+  if(chevron) chevron.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(180deg)';
+  if(!collapsed && typeof onFirstOpen === 'function') onFirstOpen();
+}
+
 function toggleReportSection(){
   rptCollapsed = !rptCollapsed;
-  const body    = document.getElementById('reportFilterBody');
-  const chevron = document.getElementById('reportChevron');
-  if(body)    body.classList.toggle('open', !rptCollapsed);
-  if(chevron) chevron.style.transform = rptCollapsed ? 'rotate(0deg)' : 'rotate(180deg)';
-  if(!rptCollapsed && document.getElementById('list-rptProductName').children.length===0){
-    buildRptProductList();
-  }
+  toggleCollapsibleSection('reportFilterBody','reportChevron',()=>{
+    if(document.getElementById('list-rptProductName').children.length===0) buildRptProductList();
+  });
+}
+
+function toggleCaseListSection(){
+  toggleCollapsibleSection('caseListBody','caseListChevron');
+}
+
+function toggleCamstarSection(){
+  toggleCollapsibleSection('camstarFilterBody','camstarChevron',()=>{
+    loadCsProducts();
+    loadCsTeams();
+  });
 }
 
 // ── Date helpers ──
@@ -3481,9 +3747,12 @@ async function fetchRptVolCases(period, datasetIdx, mode){
       res = await fetch(`${API}/analytics/report/volume?${qs}`);
       data = res.ok ? await res.json() : null;
     } else {
-      // Submitted bar — use analytics/cases with scan upload date
-      const qs = buildRptQS({date_from:from, date_to:to, milestone_field:'s.first_scan_upload_date'});
-      res = await fetch(`${API}/analytics/cases?${qs}`);
+      // Submitted bar — use report/volume with date_field=scan-upload so the population
+      // matches /analytics/trends exactly (raw Case table, includes COMPLETED cases).
+      // Previously used /analytics/cases (vw_fact_case), which excludes COMPLETED-phase
+      // cases and undercounted vs. the chart total.
+      const qs = buildRptQS({date_from:from, date_to:to, fetch_cases:'true', date_field:'first_scan_upload_date'});
+      res = await fetch(`${API}/analytics/report/volume?${qs}`);
       data = res.ok ? await res.json() : null;
     }
     if(data?.cases){
