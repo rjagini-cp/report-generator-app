@@ -941,6 +941,10 @@
             <select class="date-input" id="cs-team" onchange="onCsTeamChange()"><option value="">All</option></select>
           </div>
           <div>
+            <div class="ms-label">Select Month</div>
+            <select class="date-input" id="cs-month-picker" onchange="applyCsMonthPicker()"><option value="">—</option></select>
+          </div>
+          <div>
             <div class="ms-label">From</div>
             <input type="date" class="date-input" id="cs-date-from"/>
           </div>
@@ -995,7 +999,7 @@
               <div class="rpt-kpi"><div class="rpt-kpi-lbl">Total Volume</div><div class="rpt-kpi-val" id="cs-vol-total">—</div><div class="rpt-kpi-sub" id="cs-vol-sub">—</div></div>
             </div>
             <div class="chart-controls" style="margin-bottom:8px">
-              <button class="chart-toggle" onclick="setCsGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle" onclick="setCsGranularity('weekly',this);loadCamstarVolume()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsGranularity('monthly',this);loadCamstarVolume()">Monthly</button>
               <button class="kpi-calc-btn" id="csVolFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('vol')"><i class="fa fa-list"></i> View Cases</button>
             </div>
@@ -1014,7 +1018,7 @@
               <button class="chart-toggle" onclick="setCsUtilView('bar',this)">By User</button>
             </div>
             <div class="chart-controls" style="margin-bottom:8px">
-              <button class="chart-toggle" onclick="setCsUtilGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle" onclick="setCsUtilGranularity('weekly',this);loadCamstarUtil()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsUtilGranularity('monthly',this);loadCamstarUtil()">Monthly</button>
               <button class="chart-toggle" onclick="toggleCsUtilProductivity(this)">Productivity Mode</button>
               <button class="kpi-calc-btn" id="csUtilFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('util')"><i class="fa fa-list"></i> View Cases</button>
@@ -1032,7 +1036,7 @@
             <div class="chart-controls" style="margin-bottom:8px">
               <button class="chart-toggle active" onclick="setCsFpyView('trend',this)">Trend</button>
               <button class="chart-toggle" onclick="setCsFpyView('bar',this)">By User</button>
-              <button class="chart-toggle" onclick="setCsFpyGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle" onclick="setCsFpyGranularity('weekly',this);loadCamstarFpy()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsFpyGranularity('monthly',this);loadCamstarFpy()">Monthly</button>
               <button class="kpi-calc-btn" id="csFpyFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('fpy')"><i class="fa fa-list"></i> View Cases</button>
             </div>
@@ -1047,8 +1051,9 @@
               <div class="rpt-kpi"><div class="rpt-kpi-lbl">Team OTD</div><div class="rpt-kpi-val" id="cs-otd-avg">—</div><div class="rpt-kpi-sub" id="cs-otd-sub">—</div></div>
             </div>
             <div class="chart-controls" style="margin-bottom:8px">
-              <button class="chart-toggle" onclick="setCsOtdGranularity('weekly',this)">Weekly</button>
+              <button class="chart-toggle" onclick="setCsOtdGranularity('weekly',this);loadCsOtd()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsOtdGranularity('monthly',this);loadCsOtd()">Monthly</button>
+              <button class="kpi-calc-btn" id="csOtdFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('otd')"><i class="fa fa-list"></i> View Cases</button>
             </div>
             <div id="csOtdEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csOtdWrap" style="display:none"></div>
@@ -1833,6 +1838,23 @@ async function loadCsTeams(){
   } catch(e){ console.error('loadCsTeams error', e); }
 }
 
+function populateCsMonthPicker(){
+  const sel=document.getElementById('cs-month-picker'); if(!sel || sel.options.length>1) return;
+  const now=new Date();
+  for(let i=0;i<18;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0');
+    sel.innerHTML+=`<option value="${y}-${m}">${d.toLocaleString('default',{month:'long',year:'numeric'})}</option>`;
+  }
+}
+function applyCsMonthPicker(){
+  const val=document.getElementById('cs-month-picker').value; if(!val)return;
+  const[y,m]=val.split('-').map(Number);
+  const lastDay=new Date(y,m,0).getDate();
+  document.getElementById('cs-date-from').value=`${y}-${String(m).padStart(2,'0')}-01`;
+  document.getElementById('cs-date-to').value=`${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+}
+
 async function generateCamstarReport(){
   const btn = document.getElementById('csGenerateBtn');
   btn.disabled = true;
@@ -2130,31 +2152,19 @@ function renderCsOtdChart(data){
   if(csOtdChart_){csOtdChart_.destroy();csOtdChart_=null;}
   const wrap = document.getElementById('csOtdWrap');
   if(!document.getElementById('csOtdChart')){wrap.innerHTML='<canvas id="csOtdChart"></canvas>';}
-  const ctx = document.getElementById('csOtdChart').getContext('2d');
-  const periods = (data.periods||[]);
-  if(!periods.length){wrap.innerHTML='<div class="chart-empty"><p>No OTD data available</p></div>';return;}
-
-  const labels  = periods.map(p=>p.period);
-  const counts  = periods.map(p=>p.total);
-  const otdPcts = periods.map(p=>p.otd_pct);
-  const avgLine = data.team_otd;
-
-  csOtdChart_ = new Chart(ctx, {
-    type:'bar',
-    data:{labels, datasets:[
-      {label:'Cases', data:counts, backgroundColor:'#005F72cc', borderColor:'#005F72', borderWidth:1, borderRadius:3, barPercentage:0.7, order:1, datalabels:{display:false}},
-      {label:'OTD %', data:otdPcts, type:'line', borderColor:'#16a34a', borderWidth:2, pointRadius:3, pointBackgroundColor:'#16a34a', fill:false, yAxisID:'y2', order:0, datalabels:{display:false}},
-      {label:`Avg: ${avgLine}%`, data:labels.map(()=>avgLine), type:'line', borderColor:'#16a34a', borderWidth:2, borderDash:[6,4], pointRadius:0, fill:false, yAxisID:'y2', order:0, datalabels:{display:false}},
-    ]},
+  const canvas = document.getElementById('csOtdChart');
+  canvas.removeAttribute('style');
+  const onTime = data.total_yes||0;
+  const delayed = Math.max(0,(data.total_cases||0)-onTime);
+  if(!data.total_cases){wrap.innerHTML='<div class="chart-empty"><p>No OTD data available</p></div>';return;}
+  csOtdChart_ = new Chart(canvas.getContext('2d'), {
+    type:'doughnut',
+    data:{labels:['On Time','Delayed'],datasets:[{data:[onTime,delayed],backgroundColor:['#16a34acc','#E05A4Ecc'],borderColor:['#16a34a','#E05A4E'],borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{
-        legend:{display:true,labels:{font:{size:12}}},
-        datalabels:{display:false}
-      },
-      scales:{
-        x:{ticks:{color:'#111827',font:{size:12},maxRotation:45},grid:{color:'#e5e7eb'},border:{color:'#374151'}},
-        y:{beginAtZero:true,title:{display:true,text:'Cases',color:'#374151',font:{size:12}},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},
-        y2:{position:'right',beginAtZero:true,max:105,title:{display:true,text:'OTD %',color:'#374151',font:{size:12}},ticks:{color:'#16a34a',font:{size:12},callback:v=>v+'%'},grid:{drawOnChartArea:false},border:{color:'#16a34a'}},
+        legend:{display:true,position:'bottom',labels:{font:{size:12}}},
+        datalabels:{color:'#fff',font:{size:13,weight:'700'},formatter:v=>v>0?v:''},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/data.total_cases*100)}%)`}}
       }
     }
   });
@@ -3446,6 +3456,7 @@ function toggleCamstarSection(){
   toggleCollapsibleSection('camstarFilterBody','camstarChevron',()=>{
     loadCsProducts();
     loadCsTeams();
+    populateCsMonthPicker();
   });
 }
 
