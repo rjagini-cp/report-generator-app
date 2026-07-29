@@ -994,8 +994,10 @@
           </div>
           <div id="csWipTiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px"></div>
 
+          <div class="rpt-grid-2">
           <!-- WIP Trend chart -->
           <div class="rpt-chart-card" id="csWipTrendCard" style="position:relative;display:none;margin-bottom:16px">
+            <button class="copy-btn" onclick="copyRptChart('csWipTrendChart','WIP Trend',event)"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-chart-line"></i> WIP Trend</div>
             <div id="csWipTrendEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csWipTrendWrap" style="display:none"></div>
@@ -1004,6 +1006,7 @@
 
           <!-- Volume chart -->
           <div class="rpt-chart-card" id="csVolCard" style="position:relative;display:none;margin-bottom:16px">
+            <button class="copy-btn" onclick="copyRptChart('csVolChart','Camstar Volume',event)"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-chart-bar"></i> Volume</div>
             <div class="rpt-kpi-row" style="margin-bottom:10px">
               <div class="rpt-kpi"><div class="rpt-kpi-lbl">Total Volume</div><div class="rpt-kpi-val" id="cs-vol-total">—</div><div class="rpt-kpi-sub" id="cs-vol-sub">—</div></div>
@@ -1016,9 +1019,12 @@
             <div id="csVolEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csVolWrap" style="display:none"></div>
           </div>
+          </div><!-- /rpt-grid-2 row 1 -->
 
+          <div class="rpt-grid-2">
           <!-- Process Counts chart -->
           <div class="rpt-chart-card" id="csProcessCard" style="position:relative;display:none;margin-bottom:16px">
+            <button class="copy-btn" onclick="copyRptChart('csProcessChart','Completed Cases by Process',event)"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-list-ol"></i> Completed Cases by Process</div>
             <div id="csProcessEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csProcessWrap" style="display:none"></div>
@@ -1026,14 +1032,18 @@
 
           <!-- Lead Time by Step chart -->
           <div class="rpt-chart-card" id="csLtCard" style="position:relative;display:none;margin-bottom:16px">
+            <button class="copy-btn" onclick="copyRptChart('csLtChart','Lead Time by Process',event)"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-clock"></i> Lead Time by Process</div>
             <div id="csLtEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csLtWrap" style="display:none"></div>
-            <div class="logic-caption">Avg hours from a case entering a step to its next recorded transaction.</div>
+            <div class="logic-caption">Avg days from a case entering a step to its next recorded transaction.</div>
           </div>
+          </div><!-- /rpt-grid-2 row 2 -->
 
+          <div class="rpt-grid-2">
           <!-- Utilization chart -->
           <div class="rpt-chart-card" id="csUtilCard" style="position:relative;display:none;margin-bottom:16px">
+            <button class="copy-btn" onclick="copyRptChart('csUtilChart','Camstar Utilization',event)"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-users"></i> Utilization</div>
             <div class="rpt-kpi-row" style="margin-bottom:10px">
               <div class="rpt-kpi"><div class="rpt-kpi-lbl" id="cs-util-avg-label">Team Avg</div><div class="rpt-kpi-val" id="cs-util-avg">—</div><div class="rpt-kpi-sub" id="cs-util-sub">—</div></div>
@@ -1054,6 +1064,7 @@
 
           <!-- FPY chart -->
           <div class="rpt-chart-card" id="csFpyCard" style="position:relative;display:none;margin-bottom:16px">
+            <button class="copy-btn" onclick="copyRptChart('csFpyChart','Camstar First Pass Yield',event)"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-check-circle"></i> First Pass Yield</div>
             <div class="rpt-kpi-row" style="margin-bottom:10px">
               <div class="rpt-kpi"><div class="rpt-kpi-lbl">Team Avg FPY</div><div class="rpt-kpi-val" id="cs-fpy-avg">—</div><div class="rpt-kpi-sub" id="cs-fpy-sub">—</div></div>
@@ -1069,9 +1080,12 @@
             <div id="csFpyEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csFpyWrap" style="display:none"></div>
           </div>
+          </div><!-- /rpt-grid-2 row 3 -->
 
+          <div class="rpt-grid-2">
           <!-- OTD chart -->
           <div class="rpt-chart-card" id="csOtdCard" style="position:relative;display:none;margin-bottom:0">
+            <button class="copy-btn" onclick="copyRptChart('csOtdChart','Camstar On-Time Delivery',event)"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-truck"></i> On-Time Delivery</div>
             <div class="rpt-kpi-row" style="margin-bottom:10px">
               <div class="rpt-kpi"><div class="rpt-kpi-lbl">Team OTD</div><div class="rpt-kpi-val" id="cs-otd-avg">—</div><div class="rpt-kpi-sub" id="cs-otd-sub">—</div></div>
@@ -1084,6 +1098,7 @@
             <div id="csOtdEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csOtdWrap" style="display:none"></div>
           </div>
+          </div><!-- /rpt-grid-2 row 4 -->
 
         </div><!-- /camstarOutput -->
       </div><!-- /camstarFilterBody -->
@@ -1979,17 +1994,17 @@ async function loadCsLtByStep(){
     if(data.error){toast('Lead Time error: '+data.error,'err');return;}
     const wrap=document.getElementById('csLtWrap');
     wrap.style.display='block';
-    const steps=(data.steps||[]).filter(s=>s.avg_hours!=null);
+    const steps=(data.steps||[]).filter(s=>s.avg_days!=null);
     if(!steps.length){wrap.innerHTML='<div class="chart-empty"><p>No lead time data available</p></div>';return;}
     if(!document.getElementById('csLtChart'))wrap.innerHTML='<canvas id="csLtChart"></canvas>';
     const labels=steps.map(s=>s.process);
-    const vals=steps.map(s=>s.avg_hours);
+    const vals=steps.map(s=>s.avg_days);
     const ctx=document.getElementById('csLtChart').getContext('2d');
     if(window._csLtInst){window._csLtInst.destroy();}
     window._csLtInst=new Chart(ctx,{
       type:'bar',
-      data:{labels,datasets:[{label:'Avg Hours',data:vals,backgroundColor:'#7C3AEDcc',borderColor:'#7C3AED',borderRadius:4,barPercentage:0.7}]},
-      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{color:'#374151',font:{size:11,weight:'600'},anchor:'end',align:'right',formatter:v=>v>0?v+' h':''}},scales:{x:{beginAtZero:true,ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},y:{ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'}}},layout:{padding:{right:55}}}
+      data:{labels,datasets:[{label:'Avg Days',data:vals,backgroundColor:'#7C3AEDcc',borderColor:'#7C3AED',borderRadius:4,barPercentage:0.7}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{color:'#374151',font:{size:11,weight:'600'},anchor:'end',align:'right',formatter:v=>v>0?v+' d':''}},scales:{x:{beginAtZero:true,ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},y:{ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'}}},layout:{padding:{right:55}}}
     });
   }catch(e){toast('Lead Time error','err');}
 }
@@ -4114,7 +4129,8 @@ function copyRptChart(canvasId, label, e){
   const srcCanvas=document.getElementById(canvasId);
   if(!srcCanvas){toast('Chart not loaded','err');return;}
   const btn=e.currentTarget;
-  const instMap={rptVolChart:()=>rptVolInst,rptWipChart:()=>rptWipInst,rptProcessChart:()=>rptProcessInst,rptLtChart:()=>rptLtInst,rptFpyChart:()=>rptFpyInst,rptOtdChart:()=>rptOtdInst,rptQtChart:()=>rptQtInst};
+  const instMap={rptVolChart:()=>rptVolInst,rptWipChart:()=>rptWipInst,rptProcessChart:()=>rptProcessInst,rptLtChart:()=>rptLtInst,rptFpyChart:()=>rptFpyInst,rptOtdChart:()=>rptOtdInst,rptQtChart:()=>rptQtInst,
+    csVolChart:()=>csVolChart_,csUtilChart:()=>csUtilChart_,csFpyChart:()=>csFpyChart_,csOtdChart:()=>csOtdChart_,csWipTrendChart:()=>window._csWipTrendInst,csProcessChart:()=>window._csProcessInst,csLtChart:()=>window._csLtInst};
   const chartInst=instMap[canvasId]?.();
   // Use square dimensions for doughnut charts, wider for bar/line charts
   const isDoughnut = chartInst?.config?.type === 'doughnut';
