@@ -3179,6 +3179,22 @@ def camstar_otd_proxy():
 def camstar_wip_proxy():
     return _camstar_proxy("/analytics/camstar/wip")
 
+@app.route("/analytics/camstar/process-counts", methods=["GET"])
+def camstar_process_counts_proxy():
+    return _camstar_proxy("/analytics/camstar/process-counts")
+
+@app.route("/analytics/camstar/lt-by-step", methods=["GET"])
+def camstar_lt_by_step_proxy():
+    return _camstar_proxy("/analytics/camstar/lt-by-step")
+
+@app.route("/analytics/camstar/volume/submitted", methods=["GET"])
+def camstar_volume_submitted_proxy():
+    return _camstar_proxy("/analytics/camstar/volume/submitted")
+
+@app.route("/analytics/camstar/wip-trend", methods=["GET"])
+def camstar_wip_trend_proxy():
+    return _camstar_proxy("/analytics/camstar/wip-trend")
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

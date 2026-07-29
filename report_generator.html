@@ -973,6 +973,9 @@
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">
           <label><input type="checkbox" id="csChk_vol" checked/> Volume</label>
           <label><input type="checkbox" id="csChk_wip" checked/> WIP</label>
+          <label><input type="checkbox" id="csChk_wiptrend" checked/> WIP Trend</label>
+          <label><input type="checkbox" id="csChk_process" checked/> Process Counts</label>
+          <label><input type="checkbox" id="csChk_lt" checked/> Lead Time</label>
           <label><input type="checkbox" id="csChk_util" checked/> Utilization</label>
           <label><input type="checkbox" id="csChk_fpy" checked/> FPY</label>
           <label><input type="checkbox" id="csChk_otd" checked/> OTD</label>
@@ -987,10 +990,17 @@
           <!-- WIP tiles -->
           <div class="rpt-section-hdr"><i class="fa fa-tasks"></i> WIP (Current)</div>
           <div class="rpt-kpi-row" style="margin-bottom:14px">
-            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Implant WIP</div><div class="rpt-kpi-val" id="cs-wip-total-imp">—</div><div class="rpt-kpi-sub">Across all products</div></div>
-            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Jig WIP</div><div class="rpt-kpi-val" id="cs-wip-total-jig">—</div><div class="rpt-kpi-sub">Across all products</div></div>
+            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Total Open (WIP)</div><div class="rpt-kpi-val" id="cs-wip-total">—</div><div class="rpt-kpi-sub" id="cs-wip-sub">Across all products</div></div>
           </div>
           <div id="csWipTiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px"></div>
+
+          <!-- WIP Trend chart -->
+          <div class="rpt-chart-card" id="csWipTrendCard" style="position:relative;display:none;margin-bottom:16px">
+            <div class="rpt-chart-title"><i class="fa fa-chart-line"></i> WIP Trend</div>
+            <div id="csWipTrendEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csWipTrendWrap" style="display:none"></div>
+            <div class="logic-caption">Same completion-signal methodology as the current WIP snapshot (v9), applied as of each period's end date.</div>
+          </div>
 
           <!-- Volume chart -->
           <div class="rpt-chart-card" id="csVolCard" style="position:relative;display:none;margin-bottom:16px">
@@ -1005,6 +1015,21 @@
             </div>
             <div id="csVolEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csVolWrap" style="display:none"></div>
+          </div>
+
+          <!-- Process Counts chart -->
+          <div class="rpt-chart-card" id="csProcessCard" style="position:relative;display:none;margin-bottom:16px">
+            <div class="rpt-chart-title"><i class="fa fa-list-ol"></i> Completed Cases by Process</div>
+            <div id="csProcessEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csProcessWrap" style="display:none"></div>
+          </div>
+
+          <!-- Lead Time by Step chart -->
+          <div class="rpt-chart-card" id="csLtCard" style="position:relative;display:none;margin-bottom:16px">
+            <div class="rpt-chart-title"><i class="fa fa-clock"></i> Lead Time by Process</div>
+            <div id="csLtEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="rpt-chart-wrap" id="csLtWrap" style="display:none"></div>
+            <div class="logic-caption">Avg hours from a case entering a step to its next recorded transaction.</div>
           </div>
 
           <!-- Utilization chart -->
@@ -1036,6 +1061,7 @@
             <div class="chart-controls" style="margin-bottom:8px">
               <button class="chart-toggle active" onclick="setCsFpyView('trend',this)">Trend</button>
               <button class="chart-toggle" onclick="setCsFpyView('bar',this)">By User</button>
+              <button class="chart-toggle" onclick="setCsFpyView('step',this)">By Process</button>
               <button class="chart-toggle" onclick="setCsFpyGranularity('weekly',this);loadCamstarFpy()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsFpyGranularity('monthly',this);loadCamstarFpy()">Monthly</button>
               <button class="kpi-calc-btn" id="csFpyFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('fpy')"><i class="fa fa-list"></i> View Cases</button>
@@ -1678,8 +1704,8 @@ let lastCsFpyData=null;
 
 function setCsGranularity(g,btn){csGranularity=g;btn.closest('.chart-controls').querySelectorAll('.chart-toggle').forEach((b,i)=>{if(i<2)b.classList.remove('active');});btn.classList.add('active');}
 function setCsUtilGranularity(g,btn){csUtilGranularity_=g;btn.closest('.chart-controls').querySelectorAll('.chart-toggle').forEach((b,i)=>{if(i<2)b.classList.remove('active');});btn.classList.add('active');}
-function setCsFpyGranularity(g,btn){csFpyGranularity_=g;const ctrls=btn.closest('.chart-controls');[...ctrls.querySelectorAll('.chart-toggle')].slice(2).forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
-function setCsFpyView(v,btn){csFpyView_=v;const ctrls=btn.closest('.chart-controls');[...ctrls.querySelectorAll('.chart-toggle')].slice(0,2).forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(lastCsFpyData)renderCsFpyChart(lastCsFpyData);}
+function setCsFpyGranularity(g,btn){csFpyGranularity_=g;const ctrls=btn.closest('.chart-controls');[...ctrls.querySelectorAll('.chart-toggle')].slice(3).forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+function setCsFpyView(v,btn){csFpyView_=v;const ctrls=btn.closest('.chart-controls');[...ctrls.querySelectorAll('.chart-toggle')].slice(0,3).forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(lastCsFpyData)renderCsFpyChart(lastCsFpyData);}
 
 async function onCsTeamChange(){
   const team=document.getElementById('cs-team').value;
@@ -1861,28 +1887,111 @@ async function generateCamstarReport(){
   const output = document.getElementById('camstarOutput');
   output.style.display = 'block';
 
-  const doVol  = document.getElementById('csChk_vol').checked;
-  const doWip  = document.getElementById('csChk_wip').checked;
-  const doUtil = document.getElementById('csChk_util').checked;
-  const doFpy  = document.getElementById('csChk_fpy').checked;
-  const doOtd  = document.getElementById('csChk_otd').checked;
+  const doVol      = document.getElementById('csChk_vol').checked;
+  const doWip      = document.getElementById('csChk_wip').checked;
+  const doWipTrend = document.getElementById('csChk_wiptrend').checked;
+  const doProcess  = document.getElementById('csChk_process').checked;
+  const doLt       = document.getElementById('csChk_lt').checked;
+  const doUtil     = document.getElementById('csChk_util').checked;
+  const doFpy      = document.getElementById('csChk_fpy').checked;
+  const doOtd      = document.getElementById('csChk_otd').checked;
 
+  document.getElementById('csWipTrendCard').style.display = doWipTrend ? 'block' : 'none';
   document.getElementById('csVolCard').style.display  = doVol  ? 'block' : 'none';
+  document.getElementById('csProcessCard').style.display = doProcess ? 'block' : 'none';
+  document.getElementById('csLtCard').style.display  = doLt   ? 'block' : 'none';
   document.getElementById('csUtilCard').style.display = doUtil ? 'block' : 'none';
   document.getElementById('csFpyCard').style.display  = doFpy  ? 'block' : 'none';
   document.getElementById('csOtdCard').style.display  = doOtd  ? 'block' : 'none';
 
   try{
     const jobs = [];
-    if(doWip)  jobs.push(loadCsWip());
-    if(doVol)  jobs.push(loadCamstarVolume());
-    if(doUtil) jobs.push(loadCamstarUtil());
-    if(doFpy)  jobs.push(loadCamstarFpy());
-    if(doOtd)  jobs.push(loadCsOtd());
+    if(doWip)      jobs.push(loadCsWip());
+    if(doWipTrend) jobs.push(loadCsWipTrend());
+    if(doVol)      jobs.push(loadCamstarVolume());
+    if(doProcess)  jobs.push(loadCsProcessCounts());
+    if(doLt)       jobs.push(loadCsLtByStep());
+    if(doUtil)     jobs.push(loadCamstarUtil());
+    if(doFpy)      jobs.push(loadCamstarFpy());
+    if(doOtd)      jobs.push(loadCsOtd());
     await Promise.all(jobs);
   } finally {
     btn.disabled = false;
   }
+}
+
+async function loadCsWipTrend(){
+  const el=document.getElementById('csWipTrendEmpty'); if(el) el.style.display='none';
+  try{
+    const params = new URLSearchParams();
+    const pg = document.getElementById('cs-product-group')?.value; if(pg) params.append('product_group', pg);
+    const pl = document.getElementById('cs-product-line')?.value; if(pl) params.append('product', pl);
+    const from = document.getElementById('cs-date-from')?.value; if(from) params.append('date_from', from);
+    const to = document.getElementById('cs-date-to')?.value; if(to) params.append('date_to', to);
+    params.append('granularity', 'monthly');
+    const res = await fetch(`${API}/analytics/camstar/wip-trend?${params}`);
+    const data = await res.json();
+    if(data.error){toast('WIP Trend error: '+data.error,'err');return;}
+    const wrap=document.getElementById('csWipTrendWrap');
+    wrap.style.display='block';
+    if(!data.periods?.length){wrap.innerHTML='<div class="chart-empty"><p>No WIP trend data available</p></div>';return;}
+    if(!document.getElementById('csWipTrendChart'))wrap.innerHTML='<canvas id="csWipTrendChart"></canvas>';
+    const ctx=document.getElementById('csWipTrendChart').getContext('2d');
+    const colors=['#005F72','#7C3AED','#16a34a','#d97706','#0891b2','#dc2626','#4EA8B8','#9333ea'];
+    if(window._csWipTrendInst){window._csWipTrendInst.destroy();}
+    window._csWipTrendInst=new Chart(ctx,{
+      type:'line',
+      data:{labels:data.periods,datasets:(data.datasets||[]).map((d,i)=>({label:d.family,data:d.data,borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'22',fill:false,tension:0.3,pointRadius:2}))},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{font:{size:12}}},datalabels:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Open Cases',color:'#374151',font:{size:12}},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{color:'#111827',font:{size:12},maxRotation:45},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
+    });
+  }catch(e){toast('WIP Trend error','err');}
+}
+
+async function loadCsProcessCounts(){
+  const el=document.getElementById('csProcessEmpty'); if(el) el.style.display='none';
+  try{
+    const res = await fetch(`${API}/analytics/camstar/process-counts?${csParams('monthly')}`);
+    const data = await res.json();
+    if(data.error){toast('Process Counts error: '+data.error,'err');return;}
+    const wrap=document.getElementById('csProcessWrap');
+    wrap.style.display='block';
+    const processes=data.processes||[];
+    if(!processes.length){wrap.innerHTML='<div class="chart-empty"><p>No process data available</p></div>';return;}
+    if(!document.getElementById('csProcessChart'))wrap.innerHTML='<canvas id="csProcessChart"></canvas>';
+    const sorted=[...processes].sort((a,b)=>b.total-a.total);
+    const labels=sorted.map(p=>p.process);
+    const vals=sorted.map(p=>p.total);
+    const ctx=document.getElementById('csProcessChart').getContext('2d');
+    if(window._csProcessInst){window._csProcessInst.destroy();}
+    window._csProcessInst=new Chart(ctx,{
+      type:'bar',
+      data:{labels,datasets:[{label:'Cases Completed',data:vals,backgroundColor:'#005F72cc',borderColor:'#005F72',borderWidth:1,borderRadius:4,barPercentage:0.7}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{color:'#374151',font:{size:11,weight:'600'},anchor:'end',align:'right',formatter:v=>v>0?v:''}},scales:{x:{beginAtZero:true,ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'},title:{display:true,text:'Distinct Cases',font:{size:11},color:'#374151'}},y:{ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'}}},layout:{padding:{right:45}}}
+    });
+  }catch(e){toast('Process Counts error','err');}
+}
+
+async function loadCsLtByStep(){
+  const el=document.getElementById('csLtEmpty'); if(el) el.style.display='none';
+  try{
+    const res = await fetch(`${API}/analytics/camstar/lt-by-step?${csParams('monthly')}`);
+    const data = await res.json();
+    if(data.error){toast('Lead Time error: '+data.error,'err');return;}
+    const wrap=document.getElementById('csLtWrap');
+    wrap.style.display='block';
+    const steps=(data.steps||[]).filter(s=>s.avg_hours!=null);
+    if(!steps.length){wrap.innerHTML='<div class="chart-empty"><p>No lead time data available</p></div>';return;}
+    if(!document.getElementById('csLtChart'))wrap.innerHTML='<canvas id="csLtChart"></canvas>';
+    const labels=steps.map(s=>s.process);
+    const vals=steps.map(s=>s.avg_hours);
+    const ctx=document.getElementById('csLtChart').getContext('2d');
+    if(window._csLtInst){window._csLtInst.destroy();}
+    window._csLtInst=new Chart(ctx,{
+      type:'bar',
+      data:{labels,datasets:[{label:'Avg Hours',data:vals,backgroundColor:'#7C3AEDcc',borderColor:'#7C3AED',borderRadius:4,barPercentage:0.7}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{color:'#374151',font:{size:11,weight:'600'},anchor:'end',align:'right',formatter:v=>v>0?v+' h':''}},scales:{x:{beginAtZero:true,ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},y:{ticks:{color:'#111827',font:{size:11}},grid:{color:'#e5e7eb'},border:{color:'#374151'}}},layout:{padding:{right:55}}}
+    });
+  }catch(e){toast('Lead Time error','err');}
 }
 
 async function fetchCsCases(type){
@@ -1913,28 +2022,41 @@ async function loadCamstarVolume(){
   const el=document.getElementById('csVolEmpty');if(el)el.style.display='none';
   document.getElementById('csVolWrap').style.display='block';
   try{
-    const res=await fetch(`${API}/analytics/camstar/volume?${csParams(csGranularity)}`);
+    const qs = csParams(csGranularity);
+    const[res,subRes]=await Promise.all([
+      fetch(`${API}/analytics/camstar/volume?${qs}`),
+      fetch(`${API}/analytics/camstar/volume/submitted?${qs}`).catch(()=>null),
+    ]);
     const data=await res.json();
+    const subData = subRes?.ok ? await subRes.json() : null;
     if(data.error){toast(data.error,'err');document.getElementById('cs-vol-total').textContent='Error';return;}
     document.getElementById('cs-vol-total').textContent=data.total_volume?.toLocaleString()||'0';
-    document.getElementById('cs-vol-sub').textContent=`${data.periods?.length||0} periods · ${csGranularity}`;
+    document.getElementById('cs-vol-sub').textContent=`${data.periods?.length||0} periods · ${csGranularity}${subData?` · ${subData.total_volume?.toLocaleString()||0} submitted`:''}`;
     document.getElementById('csVolFetchBtn').style.display='inline-flex';
     if(csVolChart_){csVolChart_.destroy();csVolChart_=null;}
     const wrap=document.getElementById('csVolWrap');
     if(!document.getElementById('csVolChart'))wrap.innerHTML='<canvas id="csVolChart"></canvas>';
     const periods=data.periods||[];
     if(!periods.length)return;
+    // Union submitted periods in too, since the two queries can have slightly different ranges
+    const subMap = new Map((subData?.periods||[]).map(p=>[p.period,p.volume]));
+    const allPeriods = [...new Set([...periods.map(p=>p.period), ...subMap.keys()])].sort();
+    const completedMap = new Map(periods.map(p=>[p.period,p.volume]));
     const ctx=document.getElementById('csVolChart').getContext('2d');
     const csForecastData = await fetchCsForecast(csGranularity);
     const csForecastDs = csForecastData?.by_month ? {
       label:'Forecast',
-      data:periods.map(p=>getForecastForPeriod(csForecastData.by_month,p.period,csGranularity)),
+      data:allPeriods.map(p=>getForecastForPeriod(csForecastData.by_month,p,csGranularity)),
       type:'line',borderColor:'#E05A4E',borderWidth:2,borderDash:[6,4],
       pointRadius:3,pointBackgroundColor:'#E05A4E',fill:false,order:0,datalabels:{display:false}
     } : null;
     csVolChart_=new Chart(ctx,{
       type:'bar',
-      data:{labels:periods.map(p=>p.period),datasets:[{label:'Volume',data:periods.map(p=>p.volume),backgroundColor:'#005F72cc',borderColor:'#005F72',borderWidth:1,borderRadius:4,barPercentage:0.7},...(csForecastDs?[csForecastDs]:[])]},
+      data:{labels:allPeriods,datasets:[
+        {label:'Submitted (entered queue)',data:allPeriods.map(p=>subMap.get(p)||0),backgroundColor:'#4EA8B8cc',borderColor:'#4EA8B8',borderWidth:1,borderRadius:4,barPercentage:0.7},
+        {label:'Completed',data:allPeriods.map(p=>completedMap.get(p)||0),backgroundColor:'#005F72cc',borderColor:'#005F72',borderWidth:1,borderRadius:4,barPercentage:0.7},
+        ...(csForecastDs?[csForecastDs]:[])
+      ]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{color:'#374151',font:{size:12,weight:'600'},anchor:'end',align:'top',formatter:v=>v>0?v:''}},scales:{y:{beginAtZero:true,title:{display:true,text:'Cases',font:{size:12},color:'#374151'},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:12},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
     });
   }catch(e){toast('CamStar volume error','err');}
@@ -2041,7 +2163,19 @@ function renderCsFpyChart(data){
   const wrap=document.getElementById('csFpyWrap');
   if(!document.getElementById('csFpyChart'))wrap.innerHTML='<canvas id="csFpyChart"></canvas>';
   const ctx=document.getElementById('csFpyChart').getContext('2d');
-  if(csFpyView_==='bar'){
+  if(csFpyView_==='step'){
+    const steps=data.steps||[];
+    if(!steps.length)return;
+    const labels=steps.map(s=>s.process);
+    const vals=steps.map(s=>s.fpy);
+    const colors=vals.map(v=>v>=95?'#16a34a':v>=80?'#d97706':'#E05A4E');
+    const fpyAvg={label:'Team Avg: '+data.team_avg+'%',data:labels.map(()=>data.team_avg),type:'line',borderColor:'#16a34a',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,datalabels:{display:false}};
+    csFpyChart_=new Chart(ctx,{
+      type:'bar',
+      data:{labels,datasets:[{label:'FPY %',data:vals,backgroundColor:colors,borderRadius:4,barPercentage:0.7},fpyAvg]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{filter:item=>item.text.includes('Avg'),font:{size:12}}},datalabels:{display:false}},scales:{y:{beginAtZero:true,max:105,title:{display:true,text:'FPY %',color:'#374151'},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:12},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
+    });
+  }else if(csFpyView_==='bar'){
     const users=data.users||[];
     if(!users.length)return;
     const labels=users.map(u=>u.userId);
@@ -2092,32 +2226,26 @@ async function loadCsProducts(){
 
 // ── CAMSTAR WIP ──
 async function loadCsWip(){
-  document.getElementById('cs-wip-total-imp').innerHTML='<span class="dot-spinner"><span></span><span></span><span></span></span>';
-  document.getElementById('cs-wip-total-jig').innerHTML='<span class="dot-spinner"><span></span><span></span><span></span></span>';
+  document.getElementById('cs-wip-total').innerHTML='<span class="dot-spinner"><span></span><span></span><span></span></span>';
   try{
-    const res = await fetch(`${API}/analytics/camstar/wip`);
+    const params = new URLSearchParams();
+    const pg = document.getElementById('cs-product-group')?.value;
+    if(pg) params.append('product_group', pg);
+    const pl = document.getElementById('cs-product-line')?.value;
+    if(pl) params.append('product', pl);
+    const res = await fetch(`${API}/analytics/camstar/wip?${params}`);
     const data = await res.json();
     if(data.error){toast('CamStar WIP error: '+data.error,'err');return;}
 
-    document.getElementById('cs-wip-total-imp').textContent = data.total_implant ?? '—';
-    document.getElementById('cs-wip-total-jig').textContent = data.total_jig ?? '—';
+    document.getElementById('cs-wip-total').textContent = data.total_open ?? '—';
+    document.getElementById('cs-wip-sub').textContent = `Across all products · cases stale after ${data.stale_threshold_days ?? 30}d`;
 
     const tiles = document.getElementById('csWipTiles');
     tiles.innerHTML = (data.products||[]).map(p => `
       <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
         <div style="font-size:10px;font-weight:700;color:var(--text-2);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${p.product}">${p.product}</div>
-        <div style="display:flex;gap:10px;align-items:flex-end">
-          <div>
-            <div style="font-size:9px;color:var(--text-4)">Implant</div>
-            <div style="font-size:22px;font-weight:700;color:#005F72;line-height:1">${p.implant_wip ?? '—'}</div>
-          </div>
-          <div style="width:1px;background:var(--border);height:28px"></div>
-          <div>
-            <div style="font-size:9px;color:var(--text-4)">Jig</div>
-            <div style="font-size:22px;font-weight:700;color:#008EAA;line-height:1">${p.jig_wip ?? '—'}</div>
-          </div>
-        </div>
-        ${p.error ? `<div style="font-size:9px;color:#E05A4E;margin-top:4px">${p.error}</div>` : ''}
+        <div style="font-size:22px;font-weight:700;color:#005F72;line-height:1">${p.open_count ?? '—'}</div>
+        <div style="font-size:9px;color:var(--text-4);margin-top:2px">open cases</div>
       </div>
     `).join('');
   }catch(e){toast('CamStar WIP error','err');}
