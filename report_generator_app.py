@@ -2654,7 +2654,10 @@ def analytics_trends():
             GROUP BY period, product ORDER BY period ASC
             """
 
-        df = client.query(query).to_dataframe().astype(str)
+        df = client.query(query).to_dataframe()
+        if df.empty:
+            return jsonify({'periods': [], 'datasets': [], 'metric': metric, 'granularity': granularity})
+        df = df.astype(str)
         periods = sorted(df['period'].unique().tolist())
         products = sorted(df['product'].unique().tolist())
         colors = ['#0284c7','#16a34a','#7c3aed','#d97706','#0891b2','#dc2626','#059669','#9333ea']
