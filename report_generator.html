@@ -2060,7 +2060,14 @@ async function loadCsProcessCounts(){
   try{
     const params = new URLSearchParams(csParams('monthly'));
     const localProduct = document.getElementById('cs-process-product')?.value;
-    if(localProduct){ params.set('product', localProduct); }
+    if(localProduct){
+      // resolve_families() on the backend UNIONS product_group + product rather
+      // than overriding, so the global Product Group filter must be explicitly
+      // cleared here — otherwise this chart shows the local pick PLUS everything
+      // in whatever group is globally selected, unioned together.
+      params.delete('product_group');
+      params.set('product', localProduct);
+    }
     const res = await fetch(`${API}/analytics/camstar/process-counts?${params}`);
     const data = await res.json();
     if(data.error){toast('Process Counts error: '+data.error,'err');return;}
@@ -2134,7 +2141,7 @@ async function fetchCsForecast(granularity){
     if(from) params.append('date_from', from);
     const to = document.getElementById('cs-date-to')?.value;
     if(to) params.append('date_to', to);
-    const res = await fetch(`${API}/analytics/forecast?${params.toString()}`);
+    const res = await fetch(`${API}/analytics/camstar/forecast?${params.toString()}`);
     return await res.json();
   } catch(e){ return null; }
 }
@@ -2321,11 +2328,12 @@ function renderCsFpyChart(data){
     if(!periods.length)return;
     const labels=periods.map(p=>p.period);
     const vals=periods.map(p=>p.fpy);
+    const counts=periods.map(p=>`${p.passed}/${p.total} cases`);
     const fpyTrendAvg={label:'Avg: '+data.team_avg+'%',data:labels.map(()=>data.team_avg),borderColor:s.color,borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,datalabels:{display:false}};
     csFpyChart_=new Chart(ctx,{
       type:'line',
       data:{labels,datasets:[{label:'FPY %',data:vals,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.1)',fill:true,tension:0.3,pointRadius:3},fpyTrendAvg]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:s.showLegend,labels:{filter:item=>item.text.includes('Avg'),font:{size:12}}},datalabels:{display:false}},scales:{y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?105:Number(s.yMax),title:{display:true,text:'FPY %',color:'#374151'},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:12},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:s.showLegend,labels:{filter:item=>item.text.includes('Avg'),font:{size:12}}},datalabels:{display:false},tooltip:{callbacks:{afterLabel:ctx=>ctx.datasetIndex===0?counts[ctx.dataIndex]:''}}},scales:{y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?105:Number(s.yMax),title:{display:true,text:'FPY %',color:'#374151'},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:12},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
     });
   }
 }

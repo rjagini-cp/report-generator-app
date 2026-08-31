@@ -3196,6 +3196,18 @@ def camstar_wip_trend_proxy():
     return _camstar_proxy("/analytics/camstar/wip-trend")
 
 
+@app.route("/analytics/camstar/forecast", methods=["GET"])
+def camstar_forecast_proxy():
+    """Proxies to camstar-app's own /analytics/forecast (note: different path
+    on that end). Deliberately namespaced under /analytics/camstar/ here
+    rather than reusing the bare /analytics/forecast path, since that same
+    URL is also used by the BQ side of Report Generator (still unbuilt) with
+    a completely different product-group taxonomy — proxying the shared path
+    directly would risk a future BQ-side forecast call silently resolving
+    against Camstar's CAMSTAR_PRODUCT_GROUPS instead of BQ's own groups."""
+    return _camstar_proxy("/analytics/forecast")
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
