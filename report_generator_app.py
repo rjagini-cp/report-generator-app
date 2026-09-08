@@ -932,6 +932,14 @@ def report_wip_trend():
       Start = Scan Assessment WORKER ACCEPT (entered digital production)
       End   = Peer Review REVIEWER ACCEPT (left digital production)
       WIP at period end = cases where start <= period_end AND (end IS NULL OR end > period_end)
+    Excludes cases sitting in Surgeon Approval as of period end (PSP-reviewed, not yet
+    surgeon-approved, not sent back for rework, not yet at peer review) — Surgeon Approval
+    is tracked as its own separate stage (see analytics_wip), not part of Digital Production WIP.
+    NOTE: this only covers the "post-PSP-review" surgeon-approval path, using timestamped
+    signoff events, so it's accurate for every historical period. analytics_wip's surgeon_approval
+    bucket also has a rarer pre-PSP path (Design Call Prep + current work_queue='PLANNING_REVIEW')
+    that depends on a live status field with no historical timestamp — it can't be reconstructed
+    for past periods and is intentionally not excluded here.
     Uses raw Case table (not vw_fact_case) so completed cases are included.
     On-hold excluded via vw_event_log_rank snapshot per case.
     Config: DataGenie_Report_Config.yaml → wip_trend
@@ -1031,10 +1039,12 @@ def report_wip_trend():
                 FROM case_pipeline cp
                 LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON cp.caseId = s.caseId
             ),
+            {signoff_cte()},
             wip_at_snapshot AS (
                 SELECT cp.caseId
                 FROM case_pipeline_with_exit cp
                 JOIN {tbl('vw_fact_case')} f ON cp.caseId = f.id
+                LEFT JOIN signoff_dates sd ON cp.caseId = sd.caseId
                 WHERE f.deleted = false
                   AND f.canceled = false
                   AND f.onHold = false
@@ -1042,9 +1052,17 @@ def report_wip_trend():
                   AND cp.scan_date IS NOT NULL
                   AND cp.scan_date <= {snapshot_clause}
                   AND (cp.exit_date IS NULL OR cp.exit_date > {snapshot_clause})
+                  -- Exclude cases currently sitting in Surgeon Approval (post-PSP-review, awaiting
+                  -- surgeon signoff) as of this snapshot date. Mirrors analytics_wip's surgeon_approval
+                  -- bucket's primary (timestamped) path — see report_wip_trend's periods query for notes.
+                  AND NOT (
+                        sd.first_psp_review_date IS NOT NULL AND sd.first_psp_review_date <= {snapshot_clause}
+                        AND (sd.surgeon_approval_date IS NULL OR sd.surgeon_approval_date > {snapshot_clause})
+                        AND COALESCE(sd.surgeon_last_action_reject, false) = false
+                        AND (sd.peer_review_date IS NULL OR sd.peer_review_date > {snapshot_clause})
+                  )
                   {vw_prod_cond}
             ),
-            {signoff_cte()},
             {on_hold_cte()}
             SELECT {case_select_fields()}
             {case_joins()}
@@ -1102,10 +1120,15 @@ def report_wip_trend():
         -- Use vw_fact_case so we have phy_nameFirst/phy_nameLast for marketing filter.
         -- Excludes: on-hold cases, marketing surgeon cases, deleted/cancelled.
         -- Exit signal: LEAST(peer_review_date, ship_wrk_comp_date) — implicit-PSP rule.
+        {signoff_cte()},
         valid_cases AS (
-            SELECT cp.caseId, cp.scan_date, cp.exit_date
+            SELECT
+                cp.caseId, cp.scan_date, cp.exit_date,
+                sd.first_psp_review_date, sd.surgeon_approval_date, sd.peer_review_date,
+                COALESCE(sd.surgeon_last_action_reject, false) AS surgeon_last_action_reject
             FROM case_pipeline_with_exit cp
             JOIN {tbl('vw_fact_case')} f ON cp.caseId = f.id
+            LEFT JOIN signoff_dates sd ON cp.caseId = sd.caseId
             WHERE f.deleted = false
               AND f.canceled = false
               AND f.onHold = false
@@ -1127,6 +1150,14 @@ def report_wip_trend():
             COUNT(DISTINCT CASE
                 WHEN vc.scan_date <= p.period_end
                  AND (vc.exit_date IS NULL OR vc.exit_date > p.period_end)
+                 -- Exclude cases sitting in Surgeon Approval as of this period end: PSP-reviewed,
+                 -- not yet surgeon-approved, not sent back for rework, not yet at peer review.
+                 AND NOT (
+                       vc.first_psp_review_date IS NOT NULL AND vc.first_psp_review_date <= p.period_end
+                       AND (vc.surgeon_approval_date IS NULL OR vc.surgeon_approval_date > p.period_end)
+                       AND vc.surgeon_last_action_reject = false
+                       AND (vc.peer_review_date IS NULL OR vc.peer_review_date > p.period_end)
+                 )
                 THEN vc.caseId END) AS wip_count
         FROM periods p
         LEFT JOIN valid_cases vc ON TRUE
