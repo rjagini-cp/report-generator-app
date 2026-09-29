@@ -9,48 +9,21 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+    if (localStorage.getItem('isAuthenticated') !== 'true') {
+        window.location.replace('login.html');
+    }
+  </script>
+  <!-- Shared layout stylesheet -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/feather-icons"></script>
+  <link rel="stylesheet" href="styles.css"/>
   <style>
     :root{--sidebar-w:220px;--bg:#f0f5f7;--bg-card:#fff;--bg-input:#f5f9fb;--border:#d4e4e9;--border-dark:#b8d0d8;--text-1:#0D2B35;--text-2:#1A3540;--text-3:#5A8090;--text-4:#8aaab5;--accent:#008EAA;--accent-dark:#005F72;--accent-bg:#e8f6f9;--green:#34A87B;--green-bg:#edf9f4;--blue:#008EAA;--blue-bg:#e8f6f9;--purple:#005F72;--purple-bg:#e0f0f4;--orange:#d97706;--orange-bg:#fffbeb;--teal:#008EAA;--teal-bg:#e8f6f9;--red:#E05A4E;--red-bg:#fdf0ef;--indigo:#1A3540;--indigo-bg:#e8f0f2;}
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text-1);display:flex;min-height:100vh;font-size:13px}
-    .sidebar{width:var(--sidebar-w);background:#fff;border-right:1px solid var(--border);position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:100;display:flex;flex-direction:column;transition:width .2s ease}
-    /* Collapsed sidebar — icon only */
-    body.sidebar-collapsed .sidebar{width:48px}
-    body.sidebar-collapsed .sb-section,
-    body.sidebar-collapsed .sb-logo img,
-    body.sidebar-collapsed .sb-logo-fallback,
-    body.sidebar-collapsed nav ul li a span,
-    body.sidebar-collapsed .sb-item span,
-    body.sidebar-collapsed .sb-arrow,
-    body.sidebar-collapsed .sb-sub { display:none !important }
-    body.sidebar-collapsed .main { margin-left:48px }
-    body.sidebar-collapsed .sidebar nav ul li a,
-    body.sidebar-collapsed .sb-item { padding:10px 0; justify-content:center }
-    body.sidebar-collapsed .sidebar nav ul li a i,
-    body.sidebar-collapsed .sb-item i.icon { width:100%; text-align:center; margin:0 }
-    body.sidebar-collapsed .sb-logo { padding:10px 0; display:flex; justify-content:center; align-items:center }
-    .sb-collapse-btn { margin-top:auto; padding:10px 20px; border-top:1px solid var(--border); cursor:pointer; display:flex; align-items:center; gap:8px; color:var(--text-3); font-size:12px; user-select:none }
-    .sb-collapse-btn:hover { color:var(--text-1); background:var(--bg) }
-    body.sidebar-collapsed .sb-collapse-btn { justify-content:center; padding:10px 0 }
-    body.sidebar-collapsed .sb-collapse-btn span { display:none }
-    .sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:var(--border-dark);border-radius:2px}
-    .sb-logo{padding:16px 20px 14px;border-bottom:1px solid var(--border)}
-    .sb-logo img{height:28px;max-width:100%;object-fit:contain}
-    .sb-logo-fallback{font-size:15px;font-weight:800;color:var(--accent-dark)}
-    .sb-logo-fallback span{color:var(--text-3);font-weight:400}
-    .sb-section{font-size:10px;font-weight:700;letter-spacing:1.2px;color:var(--text-4);padding:14px 20px 4px;text-transform:uppercase}
-    .sidebar nav ul{list-style:none}
-    .sidebar nav ul li a,.sb-item{display:flex;align-items:center;gap:10px;padding:8px 20px;color:#4b5563;text-decoration:none;font-size:12.5px;cursor:pointer;transition:all .15s;border-left:2px solid transparent;user-select:none}
-    .sidebar nav ul li a:hover,.sb-item:hover{color:#111827;background:#f9fafb}
-    .sidebar nav ul li a.active{color:#005F72;background:#e8f6f9;border-left-color:#008EAA;font-weight:600}
-    .sidebar nav ul li a i,.sb-item i.icon{width:16px;text-align:center;font-size:13px;color:var(--text-4);flex-shrink:0}
-    .sidebar nav ul li a.active i{color:#005F72}
-    .sb-arrow{margin-left:auto;font-size:10px;color:var(--text-4);transition:transform .2s}
-    .sidebar nav ul li.open .sb-arrow{transform:rotate(180deg)}
-    .sb-sub{display:none;background:#fafafa}.sidebar nav ul li.open .sb-sub{display:block}
-    .sb-sub a{padding-left:44px!important;font-size:12px!important;color:var(--text-3)!important;border-left:2px solid transparent!important}
-    .sb-sub a:hover{color:#111827!important;background:#f3f4f6!important}
-    .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0;transition:margin-left .2s ease}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text-1);min-height:100vh;font-size:13px}
     .topbar{height:48px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:50;box-shadow:0 1px 3px rgba(0,0,0,.04)}
     .topbar-left{display:flex;align-items:center;gap:10px}
     .topbar-title{font-size:14px;font-weight:700}
@@ -61,9 +34,6 @@
     .refresh-btn:hover{border-color:var(--accent);color:var(--accent-dark)}
     .content{padding:16px;flex:1}
     /* LOADING */
-    .loading-overlay{display:none;position:fixed;inset:0;background:rgba(243,244,246,.88);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px}
-    .loading-overlay.show{display:flex}
-    .loading-gif{width:180px;height:180px;object-fit:contain;border-radius:12px}
     .loading-text{font-size:13px;font-weight:600;color:var(--text-2);text-align:center;line-height:1.5}
     /* KPI card inline spinner */
     .kpi-loading{display:none;position:absolute;top:10px;right:10px}
@@ -454,58 +424,152 @@
     <pre id="sqlContent"></pre>
   </div>
 </div>
-<aside class="sidebar">
-  <div class="sb-logo">
-    <img src="https://restor3dindia.netlify.app/assets/logo_combined.png" alt="Restor3d India" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/>
-    <div class="sb-logo-fallback" style="display:none">restor<span>3d</span> India</div>
-  </div>
-  <div class="sb-section">Dashboard</div>
-  <nav><ul>
-    <li><a href="https://restor3dindia.netlify.app/" title="Dashboard"><i class="fa fa-home"></i><span>Dashboard</span></a></li>
-    <li><a href="https://camstar-app-production.up.railway.app/camstar.html" target="_blank" rel="noopener" title="Camstar Dashboard"><i class="fa fa-external-link-alt"></i><span>Camstar</span></a></li>
-    <li style="display:none"><a href="data-genie.html" class="active"><i class="fa fa-bolt"></i>Data Genie</a></li>
-    <li style="display:none"><div class="sb-item" onclick="toggleSub(this)"><i class="fa fa-chart-pie icon"></i>Overview<i class="fa fa-chevron-down sb-arrow"></i></div>
-      <ul class="sb-sub">
-        <li><a href="https://restor3dindia.netlify.app/overview-team-metrics">Daily Utilization</a></li>
-        <li><a href="https://restor3dindia.netlify.app/overview-graphs">Team Metrics</a></li>
-        <li><a href="https://restor3dindia.netlify.app/overview-process-metrics">Process Metrics</a></li>
-        <li><a href="https://restor3dindia.netlify.app/last-day-targets">Last Day Targets</a></li>
-        <li><a href="https://restor3dindia.netlify.app/bq-metrics">BigQuery</a></li>
-      </ul></li>
-    <li style="display:none"><a href="https://restor3dindia.netlify.app/metrics"><i class="fa fa-chart-bar"></i>My Metrics</a></li>
-    <li style="display:none"><a href="https://restor3dindia.netlify.app/assignments"><i class="fa fa-tasks"></i>Assignment</a></li>
-  </ul></nav>
-  <div class="sb-section" style="display:none">Applications</div>
-  <nav style="display:none"><ul>
-    <li><a href="https://outlook.office.com/" target="_blank"><i class="fa fa-envelope"></i>Email</a></li>
-    <li><a href="https://teams.cloud.microsoft/" target="_blank"><i class="fa fa-comments"></i>Teams</a></li>
-    <li><a href="https://restor3dindia.netlify.app/todo"><i class="fa fa-check-square"></i>Todo</a></li>
-    <li><div class="sb-item" onclick="toggleSub(this)"><i class="fa fa-link icon"></i>Links<i class="fa fa-chevron-down sb-arrow"></i></div>
-      <ul class="sb-sub">
-        <li><a href="https://restor3dindia.netlify.app/trainings">Trainings</a></li>
-        <li><a href="https://restor3dindia.netlify.app/dashboards">Dashboards</a></li>
-        <li><a href="https://restor3dindia.netlify.app/instructions">Work Instructions</a></li>
-        <li><a href="https://restor3dindia.netlify.app/design-times">Design Times</a></li>
-        <li><a href="https://restor3dindia.netlify.app/overtime">Overtime</a></li>
-        <li><a href="https://restor3dindia.netlify.app/holidays">Holidays</a></li>
-        <li><a href="https://restor3dindia.netlify.app/leaves">Leaves</a></li>
-      </ul></li>
-    <li><div class="sb-item" onclick="toggleSub(this)"><i class="fa fa-users icon"></i>HR Management<i class="fa fa-chevron-down sb-arrow"></i></div>
-      <ul class="sb-sub">
-        <li><a href="https://restor3dindia.netlify.app/hiring">Hiring Process</a></li>
-        <li><a href="https://restor3dindia.netlify.app/forecast">Forecast</a></li>
-        <li><a href="https://restor3dindia.netlify.app/current-staff">Current Staff</a></li>
-      </ul></li>
-    <li><a href="https://restor3dindia.netlify.app/ncrs"><i class="fa fa-exclamation-triangle"></i>NCRs</a></li>
-    <li><a href="https://restor3dindia.netlify.app/skill-matrix"><i class="fa fa-th"></i>Skill Matrix</a></li>
-    <li><a href="https://restor3dindia.netlify.app/contacts"><i class="fa fa-address-book"></i>Contacts</a></li>
-  </ul></nav>
-  <div class="sb-collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar">
-    <i class="fa fa-chevron-left" id="sbCollapseIcon"></i>
-    <span>Collapse</span>
-  </div>
-</aside>
-<div class="main">
+<div class="app-container">
+<aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <img src="assets/r_logo.png" alt="R Logo" class="logo-icon">
+                    <img src="assets/logo_combined.png" alt="Restor3d India" class="logo-img">
+                </div>
+                <button class="sidebar-toggle-btn" id="sidebarToggle">
+                    <i data-feather="menu"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-menu">
+                <p class="menu-label">DASHBOARD</p>
+                <ul class="menu-list">
+                    <li class="menu-item" data-page="index.html">
+                        <a href="index.html">
+                            <i data-feather="home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="menu-item menu-item-has-submenu expanded" id="dataGenieMenuItem">
+                        <a href="javascript:void(0)">
+                            <i data-feather="zap"></i>
+                            <span>Data Genie</span>
+                            <i data-feather="chevron-down" class="submenu-arrow"></i>
+                        </a>
+                        <ul class="sub-menu">
+                            <li class="sub-menu-item" data-page="r3id.html"><a href="r3id.html">R3id</a></li>
+                            <li class="sub-menu-item" data-page="camstar.html"><a href="camstar.html">Camstar</a></li>
+                            <li class="sub-menu-item" data-page="nlq.html"><a href="nlq.html">NLQ</a></li>
+                            <li class="sub-menu-item active" data-page="report_generator.html"><a href="report_generator.html">Report Generator</a></li>
+                        </ul>
+                    </li>
+                    <li class="menu-item menu-item-has-submenu" id="dailyManagementMenuItem">
+                        <a href="javascript:void(0)">
+                            <i data-feather="pie-chart"></i>
+                            <span>Daily Management</span>
+                            <i data-feather="chevron-down" class="submenu-arrow"></i>
+                        </a>
+                        <ul class="sub-menu">
+                            <li class="sub-menu-item" data-page="assignments.html"><a href="assignments.html">Assignment</a></li>
+                            <li class="sub-menu-item" data-page="last-day-targets.html"><a href="last-day-targets.html">Last Day Targets</a></li>
+                            <li class="sub-menu-item" data-page="overview-team-metrics.html"><a href="overview-team-metrics.html">Daily Utilization</a></li>
+                            <li class="sub-menu-item" data-page="trainings.html"><a href="trainings.html">Trainings</a></li>
+                            <li class="sub-menu-item" data-page="auto-work-plan.html"><a href="auto-work-plan.html">Auto Work Plan</a></li>
+                        </ul>
+                    </li>
+                    <li class="menu-item menu-item-has-submenu" id="prodDashboardsMenuItem">
+                        <a href="javascript:void(0)">
+                            <i data-feather="layout"></i>
+                            <span>Prod Dashboards</span>
+                            <i data-feather="chevron-down" class="submenu-arrow"></i>
+                        </a>
+                        <ul class="sub-menu">
+                            <li class="sub-menu-item" data-page="knee.html"><a href="knee.html">Knee</a></li>
+                            <li class="sub-menu-item" data-page="hip.html"><a href="hip.html">Hip</a></li>
+                            <li class="sub-menu-item" data-page="psr.html"><a href="psr.html">PSR</a></li>
+                            <li class="sub-menu-item" data-page="rtsa.html"><a href="rtsa.html">rTSA</a></li>
+                            <li class="sub-menu-item" data-page="south-ss.html"><a href="south-ss.html">South SS</a></li>
+                        </ul>
+                    </li>
+                    <li class="menu-item menu-item-has-submenu" id="metricsMenuItem">
+                        <a href="javascript:void(0)">
+                            <i data-feather="bar-chart-2"></i>
+                            <span>Metrics</span>
+                            <i data-feather="chevron-down" class="submenu-arrow"></i>
+                        </a>
+                        <ul class="sub-menu">
+                            <li class="sub-menu-item" data-page="metrics.html"><a href="metrics.html">My Metrics</a></li>
+                            <li class="sub-menu-item" data-page="overview-graphs.html"><a href="overview-graphs.html">Team Metrics</a></li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <p class="menu-label">APPLICATIONS</p>
+                <ul class="menu-list">
+                    <li class="menu-item">
+                        <a href="https://outlook.office.com/" target="_blank">
+                            <i data-feather="mail"></i>
+                            <span>Email</span>
+                        </a>
+                    </li>
+                    <li class="menu-item">
+                        <a href="https://teams.cloud.microsoft/" target="_blank">
+                            <i data-feather="users"></i>
+                            <span>Teams</span>
+                        </a>
+                    </li>
+                    <li class="menu-item" data-page="todo.html">
+                        <a href="todo.html">
+                            <i data-feather="check-square"></i>
+                            <span>Todo</span>
+                        </a>
+                    </li>
+
+                    <li class="menu-item menu-item-has-submenu" id="linksMenuItem">
+                        <a href="javascript:void(0)">
+                            <i data-feather="folder"></i>
+                            <span>Links</span>
+                            <i data-feather="chevron-down" class="submenu-arrow"></i>
+                        </a>
+                        <ul class="sub-menu">
+                            <li class="sub-menu-item" data-page="dashboards.html"><a href="dashboards.html">Bookmarks</a></li>
+                            <li class="sub-menu-item" data-page="instructions.html"><a href="instructions.html">Work Instructions</a></li>
+                            <li class="sub-menu-item" data-page="design-times.html"><a href="design-times.html">Design Times</a></li>
+                            <li class="sub-menu-item" data-page="overtime.html"><a href="overtime.html">Extended Hours</a></li>
+                            <li class="sub-menu-item" data-page="holidays.html"><a href="holidays.html">Holidays lists</a></li>
+                            <li class="sub-menu-item" data-page="leaves.html"><a href="leaves.html">Leaves</a></li>
+                            <li class="sub-menu-item" data-page="validation-history.html"><a href="validation-history.html">Validation History</a></li>
+                        </ul>
+                    </li>
+                    <li class="menu-item menu-item-has-submenu" id="hrMenuItem">
+                        <a href="javascript:void(0)">
+                            <i data-feather="users"></i>
+                            <span>HR Management</span>
+                            <i data-feather="chevron-down" class="submenu-arrow"></i>
+                        </a>
+                        <ul class="sub-menu">
+                            <li class="sub-menu-item" data-page="hiring.html"><a href="hiring.html">Hiring Process</a></li>
+                            <li class="sub-menu-item" data-page="forecast.html"><a href="forecast.html">Forecast</a></li>
+                            <li class="sub-menu-item" data-page="current-staff.html"><a href="current-staff.html">Current Staff</a></li>
+                        </ul>
+                    </li>
+                    <li class="menu-item" data-page="ncrs.html">
+                        <a href="ncrs.html">
+                            <i data-feather="alert-triangle"></i>
+                            <span>NCRs</span>
+                        </a>
+                    </li>
+                    <li class="menu-item" data-page="skill-matrix.html">
+                        <a href="skill-matrix.html">
+                            <i data-feather="grid"></i>
+                            <span>Skill Matrix</span>
+                        </a>
+                    </li>
+                    <li class="menu-item" data-page="contacts.html">
+                        <a href="contacts.html">
+                            <i data-feather="phone"></i>
+                            <span>Contacts</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </aside>
+<div class="main-content">
   <div class="topbar">
     <div class="topbar-left"><span class="topbar-title">Data Genie</span><span class="topbar-badge">BETA</span></div>
     <div class="topbar-right"><span class="last-updated" id="lastUpdated">-</span><button class="refresh-btn" onclick="applyFilters()"><i class="fa fa-sync-alt"></i> Refresh</button></div>
@@ -5012,5 +5076,7 @@ document.addEventListener('DOMContentLoaded',()=>{ populateRptMonthPicker(); });
 
 </script>
 
+</div>
+<script src="script.js"></script>
 </body>
 </html>

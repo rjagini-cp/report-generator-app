@@ -3241,7 +3241,9 @@ def camstar_forecast_proxy():
 
 # ── Camstar Genie stat tiles / charts (Identity CR MA vs KA, Fixation) ──
 # Added at the bottom, alongside the rest of the Camstar whitelist, so the
-# existing proxy block above is untouched.
+# existing proxy block above is untouched. Proxied through _camstar_proxy(),
+# same as every other route in this whitelist — no separate Postgres
+# connection, no new dependency, no new Railway variable needed.
 
 @app.route("/analytics/camstar/breakdown/ka-ma", methods=["GET"])
 def camstar_breakdown_ka_ma_proxy():
