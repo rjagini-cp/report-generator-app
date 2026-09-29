@@ -3239,6 +3239,19 @@ def camstar_forecast_proxy():
     return _camstar_proxy("/analytics/forecast")
 
 
+# ── Camstar Genie stat tiles / charts (Identity CR MA vs KA, Fixation) ──
+# Added at the bottom, alongside the rest of the Camstar whitelist, so the
+# existing proxy block above is untouched.
+
+@app.route("/analytics/camstar/breakdown/ka-ma", methods=["GET"])
+def camstar_breakdown_ka_ma_proxy():
+    return _camstar_proxy("/analytics/camstar/breakdown/ka-ma")
+
+@app.route("/analytics/camstar/breakdown/fixation", methods=["GET"])
+def camstar_breakdown_fixation_proxy():
+    return _camstar_proxy("/analytics/camstar/breakdown/fixation")
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
