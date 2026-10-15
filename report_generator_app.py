@@ -3254,6 +3254,406 @@ def camstar_breakdown_fixation_proxy():
     return _camstar_proxy("/analytics/camstar/breakdown/fixation")
 
 
+# ══════════════════════════════════════════════════════════════
+#  LEAD TIME — GROUPED BREAKUP (shoulder only)
+#  /analytics/report/lt-grouped
+#
+#  Why this exists: /analytics/report/lt-by-step chains each step to the
+#  previous step in a FIXED order and takes ABS() of the gap. For shoulder
+#  that is wrong in three ways (verified on September data, 103 cases):
+#    1. Design really finishes BEFORE Jigs Design in 99% of cases, but the
+#       configured order has Jigs first -> Design time lands in the Jigs bar
+#       and ABS() hides the negative gap on the Design bar.
+#    2. Waiting for the design call, Scan Exception and On Hold time all sit
+#       inside whichever step gap they happen to fall in.
+#    3. Each step is averaged over a different set of cases, so bars don't add up.
+#
+#  This endpoint instead takes ONE cohort (cases whose Peer Review ACCEPT falls
+#  in the date range) and cuts every case's timeline (case created -> last
+#  milestone) into non-overlapping segments. A moment in time is claimed by
+#  the first state that covers it:  On Hold  >  Scan Exception  >  Waiting on
+#  Design Call;  anything left belongs to the step whose gap it falls in.
+#  Every case therefore sums exactly to its elapsed time (checked, returned
+#  as checks.max_recon_error_days).
+#
+#  Definitions (confirmed with the business):
+#    Waiting on Design Call = Design Call Prep REVIEWER ACCEPT -> call start
+#        (earliest non-cancelled DesignCall.startTime; falls back to the first
+#        r3idCaseDesignCallCompleted event). No wait if the call came first.
+#    Scan Exception = r3idCaseScansException -> first Approved/Rejected/Canceled
+#    On Hold        = r3idCasePutOnHold -> r3idCaseRemovedFromOnHold (paired in
+#        order; unmatched events are ignored)
+#
+#    Waiting on Design Call start: Design Call Prep accept when that step exists on >=50% of the
+#        cohort (shoulder); otherwise (ankle has no Design Call Prep step) the moment the call was
+#        requested - the latest r3idCaseDesignCallRequested at or before the call start.
+#
+#  Bars are the average for the cases a step applies to; group totals are the SUM OF THE STEP
+#  AVERAGES shown (so every number on the chart ties out). The true average case (creation -> last
+#  step) is returned separately as avg_case_days.
+#
+#  Only returns data when the selection is exactly ONE of the supported products (shoulder or
+#  ankle); everything else returns {"supported": false} and the page keeps using the existing
+#  lt-by-step chart.
+#  Ported from shoulder_lt_diagnostic.py (validated against real BigQuery data).
+# ══════════════════════════════════════════════════════════════
+import bisect as _ltg_bisect
+from collections import defaultdict as _ltg_dd
+from concurrent.futures import ThreadPoolExecutor as _ltg_pool
+
+_LTG_PRODUCTS = {'Reverse Total Shoulder Arthroplasty', 'Total Ankle Replacement'}
+
+# Steps in the order shoulder cases REALLY finish them (Design BEFORE Jigs Design).
+_LTG_MS = [
+    ("Scan Assessment", "scan"), ("Segmentation", "seg"), ("Input Collection", "input_collection"),
+    ("Design Call Prep", "dcp"),
+    ("Planning", "planning"), ("Design", "design"), ("Jigs Design", "jigs"),
+    ("Proposed Surgical Plan", "psp"), ("Surgeon Approval", "psp_approver"),
+    ("Peer Review", "peer"), ("Documentation Transfer", "doc_transfer"), ("Parts Request", "parts_request"),
+]
+_LTG_MERGE = {"Documentation Transfer": "Documentation Transfer & Parts Request",
+              "Parts Request": "Documentation Transfer & Parts Request"}
+_LTG_STATES = ["On Hold", "Scan Exception", "Waiting on Design Call"]   # priority order
+_LTG_EXC_START = ["r3idCaseScansException"]
+_LTG_EXC_END = ["r3idCaseScansExceptionApproved", "r3idCaseScansExceptionRejected", "r3idCaseScansExceptionCanceled"]
+
+# Bucket order and membership as agreed with the business. Steps inside a bucket are in execution order.
+# South Digital Production Team = Design Call Prep + Planning; South Team (after Digital Production) =
+# Peer Review + Documentation Transfer & Parts Request.
+_LTG_BUCKETS = [
+    ("scan_exception",     "Scan Exception Queue",          "#c2416b", ["Scan Exception"]),
+    ("segmentation",       "Segmentation",                  "#2a78b8", ["Scan Assessment", "Segmentation"]),
+    ("south_dp",           "South Digital Production Team", "#6a4fb3", ["Design Call Prep", "Planning"]),
+    ("digital_production", "Digital Production",            "#1f9e89", ["Input Collection", "Design", "Jigs Design",
+                                                                        "Proposed Surgical Plan"]),
+    ("south_team",         "South Team",                    "#7d8a2e", ["Peer Review",
+                                                                        "Documentation Transfer & Parts Request"]),
+    ("surgeon_queue",      "Surgeon Queue",                 "#e08a1e", ["Waiting on Design Call", "Surgeon Approval"]),
+    ("on_hold",            "On Hold",                       "#8a8f98", ["On Hold"]),
+]
+
+# Ankle has no Design Call Prep step, so the South Digital Production Team bucket has no role there:
+# Planning is counted in Digital Production instead (right after Input Collection, execution order).
+_LTG_PLANNING_IN_DP = {'Total Ankle Replacement'}
+
+
+def _ltg_buckets(product=None):
+    buckets = [(k, n, c, list(labels)) for k, n, c, labels in _LTG_BUCKETS]
+    if product in _LTG_PLANNING_IN_DP:
+        for k, n, c, labels in buckets:
+            if k == "south_dp" and "Planning" in labels:
+                labels.remove("Planning")
+            elif k == "digital_production":
+                labels.insert(labels.index("Input Collection") + 1 if "Input Collection" in labels else 0, "Planning")
+    return buckets
+
+
+def _ltg_acc(step, utype=None):
+    cond = f"wm.name='{step}' AND w.workModuleSignatureType='ACCEPT'"
+    if utype:
+        cond += f" AND w.workModuleUserType='{utype}'"
+    return f"MIN(IF({cond}, CAST(w.createdAt AS TIMESTAMP), NULL))"
+
+
+def _ltg_case_where(args):
+    """Same filter semantics as report_lt_by_step. Returns (where_sql, selected_product_names)."""
+    product = args.get('product', '').strip()
+    product_group = args.get('product_group', '').strip()
+    case_type = args.get('case_type', '').strip()
+    surgeon = args.get('surgeon', '').strip()
+    conds = ["f.deleted = false", "f.canceled = false"]
+    selected = []
+    if product:
+        selected = [sanitize(p) for p in product.split(',') if p.strip()]
+    elif product_group:
+        for g in [g.strip() for g in product_group.split(',')]:
+            selected.extend(PRODUCT_GROUPS.get(g, []))
+    if selected:
+        joined = "','".join(selected)
+        conds.append(f"cc.name IN ('{joined}')")
+    if case_type:
+        types = [sanitize(t) for t in case_type.split(',') if t.strip()]
+        if types:
+            joined = "','".join(types)
+            conds.append(f"ct.name IN ('{joined}')")
+    if surgeon:
+        conds.append(f"LOWER(f.alias) LIKE LOWER('%{sanitize(surgeon)}%')")
+    return " AND ".join(conds), selected
+
+
+def _ltg_fetch(case_where):
+    """Run the 4 BigQuery queries in parallel; returns (cases, hold_events, events, calls) DataFrames."""
+    case_ids = f"""(SELECT f.id
+        FROM {tbl('Case')} f
+        JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+        LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
+        WHERE {case_where})"""
+    cases_sql = f"""
+        SELECT w.caseId AS caseId,
+          CAST(ANY_VALUE(f.createdAt) AS TIMESTAMP) AS created,
+          {_ltg_acc('Scan Assessment', 'WORKER')}          AS scan,
+          {_ltg_acc('Segmentation', 'REVIEWER')}           AS seg,
+          {_ltg_acc('Input Collection', 'WORKER')}         AS input_collection,
+          {_ltg_acc('Design Call Prep', 'REVIEWER')}       AS dcp,
+          {_ltg_acc('Planning', 'REVIEWER')}               AS planning,
+          {_ltg_acc('Jigs Design', 'REVIEWER')}            AS jigs,
+          {_ltg_acc('Design', 'REVIEWER')}                 AS design,
+          {_ltg_acc('Proposed Surgical Plan', 'REVIEWER')} AS psp,
+          {_ltg_acc('Proposed Surgical Plan', 'APPROVER')} AS psp_approver,
+          {_ltg_acc('Peer Review', 'REVIEWER')}            AS peer,
+          {_ltg_acc('Documentation Transfer')}             AS doc_transfer,
+          {_ltg_acc('Parts Request')}                      AS parts_request
+        FROM {tbl('WorkModuleSignoff')} w
+        JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
+        JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
+        JOIN {tbl('Case')} f ON w.caseId = f.id
+        JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+        LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
+        WHERE w.deleted = false AND {case_where}
+        GROUP BY w.caseId"""
+    holds_sql = f"""
+        SELECT refId AS caseId, type, CAST(timestamp AS TIMESTAMP) AS ts
+        FROM {tbl('vw_event_log_rank')}
+        WHERE type IN ('r3idCasePutOnHold','r3idCaseRemovedFromOnHold')
+          AND refId IN {case_ids}
+        ORDER BY refId, timestamp"""
+    events_sql = f"""
+        SELECT refId AS caseId, type, CAST(createdAt AS TIMESTAMP) AS ts
+        FROM {_LOG}
+        WHERE type IN ('r3idCaseScansException','r3idCaseScansExceptionApproved',
+                       'r3idCaseScansExceptionRejected','r3idCaseScansExceptionCanceled',
+                       'r3idCaseDesignCallRequested')
+          AND refId IN {case_ids}
+        UNION ALL
+        SELECT refId AS caseId, CONCAT('vw:', type) AS type, CAST(timestamp AS TIMESTAMP) AS ts
+        FROM {tbl('vw_event_log_rank')}
+        WHERE type IN ('r3idCaseDesignCallCompleted','r3idCaseDesignCallRequested')
+          AND refId IN {case_ids}"""
+    calls_sql = f"""
+        SELECT caseId, CAST(startTime AS TIMESTAMP) AS start_ts, cancelled, deleted
+        FROM {tbl('DesignCall')}
+        WHERE caseId IN {case_ids}"""
+    with _ltg_pool(max_workers=4) as ex:
+        futs = [ex.submit(lambda q=q: client.query(q).to_dataframe()) for q in (cases_sql, holds_sql, events_sql, calls_sql)]
+        return [f_.result() for f_ in futs]
+
+
+def _ltg_hold_intervals(ev, now):
+    """Pair PutOnHold -> RemovedFromOnHold per case, in time order. A Put while already on hold, or a
+    Remove while not on hold, is ignored (the older SQL mis-pairs those)."""
+    out = {}
+    if ev is None or len(ev) == 0:
+        return out
+    ev = ev.copy()
+    ev["ts"] = pd.to_datetime(ev["ts"], utc=True)
+    for cid, g in ev.sort_values(["caseId", "ts"]).groupby("caseId"):
+        start, lst = None, []
+        for t, ts in zip(g["type"], g["ts"]):
+            if t == "r3idCasePutOnHold":
+                if start is None:
+                    start = ts
+            elif start is not None:
+                lst.append((start, ts))
+                start = None
+        if start is not None:
+            lst.append((start, now))
+        out[cid] = lst
+    return out
+
+
+def _ltg_exception_intervals(ev):
+    out = {}
+    if ev is None or len(ev) == 0:
+        return out
+    sub = ev[ev["type"].isin(_LTG_EXC_START + _LTG_EXC_END)].sort_values(["caseId", "ts"])
+    for cid, g in sub.groupby("caseId"):
+        start, lst = None, []
+        for t, ts in zip(g["type"], g["ts"]):
+            if t in _LTG_EXC_START:
+                if start is None:
+                    start = ts
+            elif start is not None:
+                lst.append((start, ts))
+                start = None
+        out[cid] = lst            # an exception that never closed is ignored
+    return out
+
+
+def _ltg_call_waits(df, calls, ev, start_col="dcp"):
+    """Waiting on Design Call = <start> -> call start.
+    start_col 'dcp'     : Design Call Prep REVIEWER ACCEPT (shoulder).
+    start_col 'request' : when the call was requested = the latest r3idCaseDesignCallRequested at or before the
+                          call start (log event; falls back to the event-log view's copy). No request found -> no wait.
+    Call start = earliest non-cancelled, non-deleted DesignCall.startTime (fallback: first
+    r3idCaseDesignCallCompleted). No wait if the call came before the start point."""
+    first_call = pd.Series(dtype="datetime64[ns, UTC]")
+    if calls is not None and len(calls):
+        c = calls.copy()
+        c["start_ts"] = pd.to_datetime(c["start_ts"], utc=True, errors="coerce")
+        for col in ("cancelled", "deleted"):
+            c[col] = c[col].map(lambda v: str(v).strip().lower() == "true")
+        c = c[(~c["cancelled"]) & (~c["deleted"]) & c["start_ts"].notna()]
+        first_call = c.groupby("caseId")["start_ts"].min()
+    done = pd.Series(dtype="datetime64[ns, UTC]")
+    if ev is not None and len(ev):
+        d = ev[ev["type"] == "vw:r3idCaseDesignCallCompleted"]
+        done = d.groupby("caseId")["ts"].min()
+    req_log, req_vw = {}, {}
+    if start_col == "request" and ev is not None and len(ev):
+        for typ, store in (("r3idCaseDesignCallRequested", req_log), ("vw:r3idCaseDesignCallRequested", req_vw)):
+            for cid, g in ev[ev["type"] == typ].groupby("caseId"):
+                store[cid] = list(g["ts"].dropna())
+    waits = {}
+    for _, r in df.iterrows():
+        cid = r["caseId"]
+        t = first_call.get(cid)
+        if t is None or pd.isna(t):
+            t = done.get(cid)
+        if t is None or pd.isna(t):
+            continue
+        if start_col == "request":
+            cands = [x for x in (req_log.get(cid) or req_vw.get(cid) or []) if x <= t]
+            start = max(cands) if cands else None
+        else:
+            start = r[start_col] if pd.notna(r[start_col]) else None
+        if start is not None and t > start:
+            waits[cid] = [(start, t)]
+    return waits
+
+
+def _ltg_partition(created, items, states):
+    """Cut [created, last milestone] into segments; sums to elapsed by construction."""
+    created = min(created, items[0][0])
+    last = items[-1][0]
+    gaps, prev = [], created
+    for ts, _, name in items:
+        gaps.append((prev, ts, name))
+        prev = ts
+    ends = [g[1] for g in gaps]
+    pts = {created, last}
+    for a, b, _ in gaps:
+        pts.update([a, b])
+    for lst in states.values():
+        for hs, he in lst:
+            for x in (hs, he):
+                if created < x < last:
+                    pts.add(x)
+    pts = sorted(pts)
+    res = _ltg_dd(float)
+    for a, b in zip(pts[:-1], pts[1:]):
+        if b <= a:
+            continue
+        mid = a + (b - a) / 2
+        label = gaps[min(_ltg_bisect.bisect_left(ends, mid), len(gaps) - 1)][2]
+        for st in _LTG_STATES:
+            if any(hs <= mid < he for hs, he in states.get(st, [])):
+                label = st
+                break
+        res[label] += (b - a).total_seconds() / 86400.0
+    return res, (last - created).total_seconds() / 86400.0
+
+
+def _ltg_compute(cases, hold_ev, events, calls, date_from, date_to, product=None):
+    """Pure function (no BigQuery) so it can be tested offline. Returns the JSON payload."""
+    df = cases.copy()
+    if "input_collection" not in df.columns:
+        df["input_collection"] = pd.NaT
+    for c in ["created", "scan", "seg", "input_collection", "dcp", "planning", "jigs", "design", "psp",
+              "psp_approver", "peer", "doc_transfer", "parts_request"]:
+        df[c] = pd.to_datetime(df[c], utc=True, errors="coerce")
+    ev = None
+    if events is not None and len(events):
+        ev = events.copy()
+        ev["ts"] = pd.to_datetime(ev["ts"], utc=True, errors="coerce")
+
+    cohort = df[df["peer"].notna()]
+    if date_from:
+        cohort = cohort[cohort["peer"] >= pd.Timestamp(date_from, tz="UTC")]
+    if date_to:
+        cohort = cohort[cohort["peer"] < pd.Timestamp(date_to, tz="UTC") + pd.Timedelta(days=1)]
+
+    holds = _ltg_hold_intervals(hold_ev, pd.Timestamp.now(tz="UTC"))
+    excs = _ltg_exception_intervals(ev)
+    dcp_cov = float(cohort["dcp"].notna().mean()) if len(cohort) else 0.0
+    wait_col = "dcp" if dcp_cov >= 0.5 else "request"
+    waits = _ltg_call_waits(cohort, calls, ev, start_col=wait_col)
+
+    per_case, present, max_err = {}, {}, 0.0
+    for _, r in cohort.iterrows():
+        cid = r["caseId"]
+        items = sorted([(r[c], i, name) for i, (name, c) in enumerate(_LTG_MS) if pd.notna(r[c])],
+                       key=lambda x: (x[0], x[1]))
+        if not items:
+            continue
+        states = {"On Hold": holds.get(cid, []), "Scan Exception": excs.get(cid, []),
+                  "Waiting on Design Call": waits.get(cid, [])}
+        res, elapsed = _ltg_partition(r["created"], items, states)
+        merged = _ltg_dd(float)
+        for k, v in res.items():
+            merged[_LTG_MERGE.get(k, k)] += v
+        per_case[cid] = merged
+        present[cid] = {_LTG_MERGE.get(n, n) for _, _, n in items}
+        max_err = max(max_err, abs(sum(res.values()) - elapsed))
+
+    n = len(per_case)
+    if n == 0:
+        return {"supported": True, "cohort_cases": 0, "buckets": [], "total_days": 0}
+
+    def _r(v, d=1):
+        return None if v is None or v != v else round(float(v), d)
+
+    out_buckets, total_all, avg_case = [], 0.0, 0.0
+    for key, name, color, labels in _ltg_buckets(product):
+        steps, btotal = [], 0.0
+        for label in labels:
+            if label in _LTG_STATES:
+                vals = [pc[label] for pc in per_case.values() if pc.get(label, 0) > 0]
+            else:
+                vals = [per_case[c].get(label, 0.0) for c in per_case if label in present[c]]
+            if not vals:
+                continue
+            s_ = pd.Series(vals, dtype=float)
+            contrib = sum(per_case[c].get(label, 0.0) for c in per_case) / n
+            avg_case += contrib
+            mean_r = round(float(s_.mean()), 1)
+            btotal += mean_r          # group total = sum of the step averages exactly as displayed
+            steps.append({"step": label, "mean": mean_r, "median": _r(s_.median()),
+                          "p90": _r(s_.quantile(0.9)), "cases": int(len(s_)),
+                          "pct_cases": _r(100.0 * len(s_) / n, 0), "per_case": _r(contrib, 2)})
+        if steps:
+            out_buckets.append({"key": key, "name": name, "color": color, "total": round(btotal, 1), "steps": steps})
+            total_all += btotal
+    return {
+        "supported": True,
+        "cohort_cases": int(n),
+        "total_days": round(total_all, 1),          # sum of step averages
+        "avg_case_days": round(avg_case, 1),        # true average case, creation -> last step
+        "wait_starts_at": "Design Call Prep accept" if wait_col == "dcp" else "when the call was requested",
+        "buckets": out_buckets,
+        "checks": {"max_recon_error_days": round(float(max_err), 6)},
+    }
+
+
+@app.route("/analytics/report/lt-grouped", methods=["GET"])
+def report_lt_grouped():
+    """Grouped, non-overlapping lead-time breakup for shoulder (see section header above)."""
+    try:
+        args = request.args
+        case_where, selected = _ltg_case_where(args)
+        if len(set(selected)) != 1 or selected[0] not in _LTG_PRODUCTS:
+            return jsonify({"supported": False,
+                            "reason": "Grouped breakup is only available when exactly one of these products is "
+                                      f"selected: {', '.join(sorted(_LTG_PRODUCTS))}."})
+        date_from = validate_date(args.get('date_from', ''))
+        date_to = validate_date(args.get('date_to', ''))
+        cases, hold_ev, events, calls = _ltg_fetch(case_where)
+        payload = _ltg_compute(cases, hold_ev, events, calls, date_from, date_to, product=selected[0])
+        payload["date_from"], payload["date_to"] = date_from, date_to
+        return jsonify(payload)
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)

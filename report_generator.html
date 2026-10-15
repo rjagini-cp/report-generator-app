@@ -411,6 +411,31 @@
       .rpt-section-hdr:nth-of-type(3) { break-before:page; }
     }
   </style>
+<style>
+/* Lead Time grouped breakup (shoulder) */
+.ltg-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:4px 0 8px;font-size:12px;color:var(--text-2,#374151)}
+.ltg-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.ltg-total{font-size:13px;font-weight:700;margin:6px 0 2px;color:var(--text-1,#111827)}
+.ltg-sub{font-size:11px;color:var(--text-4,#6b7280);margin:0 0 6px}
+.ltg-sum{display:flex;width:100%;height:34px;border-radius:4px;overflow:hidden}
+.ltg-sum div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;overflow:hidden;white-space:nowrap;border-right:2px solid #fff;box-sizing:border-box}
+.ltg-sumlbl{display:flex;width:100%;margin:3px 0 12px}
+.ltg-sumlbl div{font-size:10px;color:var(--text-4,#6b7280);text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ltg-hdr{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:5px 0 4px 8px;border-left:4px solid #999;border-bottom:1px solid #d1d5db;font-size:13px;font-weight:700}
+.ltg-hdr span{font-size:12px}
+.ltg-row{display:flex;align-items:center;height:24px}
+.ltg-lbl{flex:0 0 250px;text-align:right;padding-right:10px;font-size:12px;color:var(--text-1,#111827);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ltg-track{position:relative;flex:1;height:100%;margin-right:200px}
+.ltg-grid{position:absolute;top:0;bottom:0;width:1px;background:#e5e7eb}
+.ltg-bar{position:absolute;left:0;top:4px;height:16px;border-radius:2px;min-width:2px}
+.ltg-brk{position:absolute;top:2px;height:20px;width:7px;left:92%;background:#fff;transform:skewX(-28deg)}
+.ltg-val{position:absolute;top:0;line-height:24px;font-size:11px;color:#374151;white-space:nowrap}
+.ltg-val small{color:#9ca3af;margin-left:5px;font-size:10px}
+.ltg-axis{position:relative;height:18px;margin-left:250px;margin-right:200px;margin-top:2px}
+.ltg-axis span{position:absolute;font-size:10px;color:#6b7280;transform:translateX(-50%)}
+.ltg-axt{text-align:center;font-size:11px;color:#6b7280;margin:0 0 6px 180px}
+.ltg-note{font-size:10px;color:var(--text-4,#6b7280);margin-top:6px;line-height:1.45}
+</style>
 </head>
 <body>
 <div class="loading-overlay" id="loadingOverlay">
@@ -875,7 +900,8 @@
                 <button class="cs-reset-btn" onclick="resetRptChartSettings('rptLtChart')"><i class="fa fa-undo"></i> Reset</button>
               </div>
               <div class="rpt-chart-wrap-tall"><canvas id="rptLtChart"></canvas></div>
-              <div class="logic-caption">Average calendar days from previous step's effective completion to this step's effective completion. Peer Review excludes surgeon wait. Population per step matches the Completed Cases chart. Click a bar to view cases.</div>
+              <div id="rptLtGroupedWrap" style="display:none"></div>
+              <div class="logic-caption" id="rptLtCaption">Average calendar days from previous step's effective completion to this step's effective completion. Peer Review excludes surgeon wait. Population per step matches the Completed Cases chart. Click a bar to view cases.</div>
               <div style="font-size:9px;color:var(--text-4);margin-top:4px"><i class="fa fa-info-circle"></i> Sub-step LTs scaled from Digital Production LT · Surgeon Approval drawn directly from KPI</div>
             </div>
           </div>
@@ -1043,6 +1069,7 @@
           <label><input type="checkbox" id="csChk_util" checked/> Utilization</label>
           <label><input type="checkbox" id="csChk_fpy" checked/> FPY</label>
           <label><input type="checkbox" id="csChk_otd" checked/> OTD</label>
+          <label><input type="checkbox" id="csChk_breakdown" checked/> Identity CR Breakdown</label>
         </div>
 
         <button class="rpt-generate-btn" id="csGenerateBtn" onclick="generateCamstarReport()">
@@ -1239,6 +1266,36 @@
             <div class="logic-caption">Filter to one product to reduce clutter — this chart can get packed across all products at once.</div>
           </div>
           </div><!-- /rpt-grid-2 row 4 -->
+
+          <!-- Identity CR Breakdown: MA vs KA, Fixation (Cemented vs Porous) -->
+          <!-- Fetched from /analytics/camstar/breakdown/* on report-generator-app's
+               own backend, which proxies through to camstar-app (same pattern as every
+               other Camstar chart on this page). Date range filter only
+               (cs-date-from/cs-date-to); Product/Team/Step/Engineer filters don't apply
+               since this is always scoped to Identity CR on the backend. -->
+          <div class="rpt-section-hdr" id="csBreakdownCard" style="display:none"><i class="fa fa-chart-pie"></i> Identity CR Breakdown</div>
+          <div id="csBreakdownTilesRow" style="display:none;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px" class="rpt-kpi-row">
+            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Cemented</div><div class="rpt-kpi-val" id="cs-bd-cemented">—</div></div>
+            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Cemented KA</div><div class="rpt-kpi-val" id="cs-bd-cemented-ka">—</div></div>
+            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Porous</div><div class="rpt-kpi-val" id="cs-bd-porous">—</div></div>
+            <div class="rpt-kpi"><div class="rpt-kpi-lbl">Porous KA</div><div class="rpt-kpi-val" id="cs-bd-porous-ka">—</div></div>
+          </div>
+          <div class="rpt-grid-2" id="csBreakdownChartsRow" style="display:none">
+            <div class="rpt-chart-card" id="csKaMaCard" style="position:relative;margin-bottom:0">
+              <button class="copy-btn" onclick="copyRptChart('csKaMaChart','Identity CR MA vs KA',event)"><i class="fa fa-copy"></i> Copy</button>
+              <div class="rpt-chart-title"><i class="fa fa-chart-pie"></i> Identity CR: MA vs KA</div>
+              <div id="csKaMaEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+              <div class="rpt-chart-wrap" id="csKaMaWrap" style="display:none"></div>
+              <div class="logic-caption">KA = at least one 'G3 KA' workflow step in that case's history; MA = every other Identity CR case.</div>
+            </div>
+            <div class="rpt-chart-card" id="csFixCard" style="position:relative;margin-bottom:0">
+              <button class="copy-btn" onclick="copyRptChart('csFixChart','Camstar Fixation Cemented vs Porous',event)"><i class="fa fa-copy"></i> Copy</button>
+              <div class="rpt-chart-title"><i class="fa fa-chart-pie"></i> Fixation: Cemented vs Porous</div>
+              <div id="csFixEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+              <div class="rpt-chart-wrap" id="csFixWrap" style="display:none"></div>
+              <div class="logic-caption" id="csFixCaption">Fixation from case_attributes (fem_type/tib_type across all of a case's components); Porous if Porous appears anywhere. Lighter shade = KA.</div>
+            </div>
+          </div><!-- /csBreakdownChartsRow -->
 
         </div><!-- /camstarOutput -->
       </div><!-- /camstarFilterBody -->
@@ -2050,6 +2107,7 @@ async function generateCamstarReport(){
   const doUtil     = document.getElementById('csChk_util').checked;
   const doFpy      = document.getElementById('csChk_fpy').checked;
   const doOtd      = document.getElementById('csChk_otd').checked;
+  const doBreakdown = document.getElementById('csChk_breakdown').checked;
 
   document.getElementById('csWipTrendCard').style.display = doWipTrend ? 'block' : 'none';
   document.getElementById('csVolCard').style.display  = doVol  ? 'block' : 'none';
@@ -2058,6 +2116,9 @@ async function generateCamstarReport(){
   document.getElementById('csUtilCard').style.display = doUtil ? 'block' : 'none';
   document.getElementById('csFpyCard').style.display  = doFpy  ? 'block' : 'none';
   document.getElementById('csOtdCard').style.display  = doOtd  ? 'block' : 'none';
+  document.getElementById('csBreakdownCard').style.display = doBreakdown ? 'flex' : 'none';
+  document.getElementById('csBreakdownTilesRow').style.display = doBreakdown ? 'grid' : 'none';
+  document.getElementById('csBreakdownChartsRow').style.display = doBreakdown ? 'grid' : 'none';
 
   try{
     const jobs = [];
@@ -2069,6 +2130,7 @@ async function generateCamstarReport(){
     if(doUtil)     jobs.push(loadCamstarUtil());
     if(doFpy)      jobs.push(loadCamstarFpy());
     if(doOtd)      jobs.push(loadCsOtd());
+    if(doBreakdown) jobs.push(loadCsBreakdown());
     await Promise.all(jobs);
   } finally {
     btn.disabled = false;
@@ -2508,6 +2570,90 @@ function renderCsOtdChart(data){
     }
   });
 }
+
+// ── CAMSTAR IDENTITY CR BREAKDOWN (MA vs KA, Fixation) ──
+// Proxied through report-generator-app's own /analytics/camstar/breakdown/*
+// routes (which forward to camstar-app) - date range filter only, since
+// these are always scoped to Identity CR server-side.
+let csKaMaChart_ = null, csFixChart_ = null;
+
+function csBreakdownParams(){
+  const params = new URLSearchParams();
+  const from = document.getElementById('cs-date-from')?.value; if(from) params.append('date_from', from);
+  const to = document.getElementById('cs-date-to')?.value; if(to) params.append('date_to', to);
+  return params.toString();
+}
+
+async function loadCsBreakdown(){
+  document.getElementById('csKaMaEmpty').style.display='none';
+  document.getElementById('csKaMaWrap').style.display='block';
+  document.getElementById('csFixEmpty').style.display='none';
+  document.getElementById('csFixWrap').style.display='block';
+  try{
+    const qs = csBreakdownParams();
+    const [kaMaRes, fixRes] = await Promise.all([
+      fetch(`${API}/analytics/camstar/breakdown/ka-ma?${qs}`),
+      fetch(`${API}/analytics/camstar/breakdown/fixation?${qs}`)
+    ]);
+    const kaMaData = await kaMaRes.json();
+    const fixData = await fixRes.json();
+    if(kaMaData.error){toast('Breakdown error: '+kaMaData.error,'err');return;}
+    if(fixData.error){toast('Breakdown error: '+fixData.error,'err');return;}
+    renderCsKaMaChart(kaMaData.ma||0, kaMaData.ka||0);
+    renderCsFixChart(fixData.cemented_ma||0, fixData.cemented_ka||0, fixData.porous_ma||0, fixData.porous_ka||0);
+    document.getElementById('cs-bd-cemented').textContent = (fixData.cemented_ma||0).toLocaleString();
+    document.getElementById('cs-bd-cemented-ka').textContent = (fixData.cemented_ka||0).toLocaleString();
+    document.getElementById('cs-bd-porous').textContent = (fixData.porous_ma||0).toLocaleString();
+    document.getElementById('cs-bd-porous-ka').textContent = (fixData.porous_ka||0).toLocaleString();
+    const cap = document.getElementById('csFixCaption');
+    const baseCaption = "Fixation from case_attributes (fem_type/tib_type across all of a case's components); Porous if Porous appears anywhere. Lighter shade = KA.";
+    if(cap) cap.textContent = fixData.unclassified > 0
+      ? `${baseCaption} ${fixData.unclassified} case(s) excluded — no fixation data synced yet.`
+      : baseCaption;
+  }catch(e){toast('Identity CR breakdown error','err');}
+}
+
+function renderCsKaMaChart(ma, ka){
+  if(csKaMaChart_){csKaMaChart_.destroy();csKaMaChart_=null;}
+  const wrap = document.getElementById('csKaMaWrap');
+  if(!document.getElementById('csKaMaChart')){wrap.innerHTML='<canvas id="csKaMaChart"></canvas>';}
+  const canvas = document.getElementById('csKaMaChart');
+  canvas.removeAttribute('style');
+  const total = ma + ka;
+  if(!total){wrap.innerHTML='<div class="chart-empty"><p>No Identity CR data available</p></div>';return;}
+  csKaMaChart_ = new Chart(canvas.getContext('2d'), {
+    type:'doughnut',
+    data:{labels:['MA','KA'],datasets:[{data:[ma,ka],backgroundColor:['#008EAA','#99D6E3'],borderColor:'#fff',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{
+        legend:{display:true,position:'bottom',labels:{font:{size:12}}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`}}
+      }
+    }
+  });
+}
+
+function renderCsFixChart(cementedMa, cementedKa, porousMa, porousKa){
+  if(csFixChart_){csFixChart_.destroy();csFixChart_=null;}
+  const wrap = document.getElementById('csFixWrap');
+  if(!document.getElementById('csFixChart')){wrap.innerHTML='<canvas id="csFixChart"></canvas>';}
+  const canvas = document.getElementById('csFixChart');
+  canvas.removeAttribute('style');
+  const total = cementedMa + cementedKa + porousMa + porousKa;
+  if(!total){wrap.innerHTML='<div class="chart-empty"><p>No fixation data available</p></div>';return;}
+  csFixChart_ = new Chart(canvas.getContext('2d'), {
+    type:'doughnut',
+    data:{labels:['Cemented','Cemented KA','Porous','Porous KA'],
+      datasets:[{data:[cementedMa,cementedKa,porousMa,porousKa],backgroundColor:['#008EAA','#99D6E3','#d97706','#FBC474'],borderColor:'#fff',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{
+        legend:{display:true,position:'bottom',labels:{font:{size:11},boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`}}
+      }
+    }
+  });
+}
+
 const CHART_DEFAULTS = {
   volChart:    {color:'#005F72',type:'bar',  barWidth:70,dlSize:12,tickSize:12,yMin:'',yMax:'',showLabels:true, showLegend:false},
   ltChart:     {color:'#005F72',type:'line', barWidth:70,dlSize:12,tickSize:12,yMin:'',yMax:'',showLabels:false,showLegend:true},
@@ -4326,14 +4472,94 @@ function destroyRptCharts(){
   rptVolInst=rptWipInst=rptProcessInst=rptLtInst=rptFpyInst=rptOtdInst=rptProcEffInst=rptExclInst=rptQtInst=null;
 }
 
+// ── Lead Time GROUPED breakup (shoulder) ──
+// Data: /analytics/report/lt-grouped. Plain HTML/CSS bars (no canvas) so html2canvas captures it for the PDF export.
+function rptLtShowGrouped(on){
+  const flat=document.getElementById('rptLtChart')?.closest('.rpt-chart-wrap-tall');
+  const gw=document.getElementById('rptLtGroupedWrap');
+  const cap=document.getElementById('rptLtCaption');
+  const sb=document.getElementById('rcs_btn_rptLtChart');
+  const panel=document.getElementById('rcs_panel_rptLtChart');
+  if(flat)flat.style.display=on?'none':'';
+  if(gw)gw.style.display=on?'block':'none';
+  if(cap)cap.style.display=on?'none':'';
+  if(sb)sb.style.display=on?'none':'';
+  if(panel&&on)panel.classList.remove('open','show');
+}
+function renderRptLtGrouped(g){
+  const wrap=document.getElementById('rptLtGroupedWrap'); if(!wrap)return;
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const f1=v=>(v==null||isNaN(v))?'–':(Math.round(v*10)/10).toFixed(1);
+  const buckets=(g.buckets||[]).filter(b=>b.steps&&b.steps.length);
+  const total=buckets.reduce((a,b)=>a+(b.total||0),0)||1;
+  const n=g.cohort_cases||0;
+  // Axis: if one bar is more than ~2x the next-longest (e.g. On Hold), cut the axis at the next-longest so the
+  // other steps stay readable; the long bar is drawn to the edge with a break mark and keeps its true label.
+  const means=buckets.flatMap(b=>b.steps.map(s=>s.mean||0)).sort((a,b)=>b-a);
+  const maxV=Math.max(1,means[0]||1), second=means[1]||0;
+  const clipped=second>0&&maxV>2.2*second;
+  const base=clipped?second*1.15:maxV;
+  const tick=base<=10?2:base<=25?5:base<=50?10:20;
+  const axisMax=Math.max(tick,Math.ceil(base/tick)*tick);
+  const ticks=[]; for(let t=0;t<=axisMax;t+=tick)ticks.push(t);
+  let h='';
+  h+=`<div class="ltg-total">${n} cases completed through Peer Review · sum of step averages ${f1(g.total_days)} days</div>`;
+  h+=`<div class="ltg-sub">The average case takes ${f1(g.avg_case_days)} days from creation to its last step. Waiting on design call, scan exception and on hold apply to only some cases, so the sum of step averages is larger.</div>`;
+  h+='<div class="ltg-legend">'+buckets.map(b=>`<span><i style="background:${b.color}"></i>${esc(b.name)} · <b>${f1(b.total)}d</b></span>`).join('')+'</div>';
+  h+='<div class="ltg-sum">'+buckets.map(b=>{const w=(b.total||0)/total*100;return `<div style="width:${w}%;background:${b.color}" title="${esc(b.name)}: ${f1(b.total)} d (sum of step averages)">${w>=5?f1(b.total)+'d':''}</div>`;}).join('')+'</div>';
+  h+='<div class="ltg-sumlbl">'+buckets.map(b=>{const w=(b.total||0)/total*100;return `<div style="width:${w}%">${w>=12?esc(b.name):''}</div>`;}).join('')+'</div>';
+  buckets.forEach(b=>{
+    h+=`<div class="ltg-hdr" style="border-left-color:${b.color};color:${b.color}">${esc(b.name)}<span>Σ ${f1(b.total)}d</span></div>`;
+    b.steps.forEach(s=>{
+      const cut=(s.mean||0)>axisMax;
+      const pct=Math.min(100,(s.mean||0)/axisMax*100);
+      const partial=s.cases<n;
+      const skewed=(s.mean||0)>=3&&s.median!=null&&(s.mean>1.8*s.median);   // a few long cases pull the average up
+      const tags=[]; if(partial)tags.push(`${s.cases}/${n} cases`); if(skewed)tags.push(`median ${f1(s.median)}`);
+      const tip=`${s.step}: avg ${f1(s.mean)} d when it applies · median ${f1(s.median)} d · 90th pct ${f1(s.p90)} d · ${s.cases} of ${n} cases (${s.pct_cases}%) · adds ${s.per_case} d to the average case`;
+      h+=`<div class="ltg-row" title="${esc(tip)}"><div class="ltg-lbl">${esc(s.step)}</div><div class="ltg-track">`
+        +ticks.map(t=>`<div class="ltg-grid" style="left:${t/axisMax*100}%"></div>`).join('')
+        +`<div class="ltg-bar" style="width:${pct}%;background:${b.color}"></div>`
+        +(cut?'<div class="ltg-brk"></div>':'')
+        +`<div class="ltg-val" style="left:calc(${pct}% + 6px)">${f1(s.mean)}${tags.length?`<small>${tags.join(' · ')}</small>`:''}</div></div></div>`;
+    });
+  });
+  h+='<div class="ltg-axis">'+ticks.map(t=>`<span style="left:${t/axisMax*100}%">${t}</span>`).join('')+'</div>';
+  h+='<div class="ltg-axt">Calendar Days</div>';
+  h+=`<div class="ltg-note">Each bar is the average calendar days for the cases that step applies to (the small tag shows how many of the ${n} cases that is, and the median where a few very long cases pull the average up). `
+    +`Group totals (Σ) are the sum of the step averages shown. Steps are listed in the order cases actually finish them. `
+    +`Time on hold, scan exceptions and waiting for the design call are their own buckets and are never counted inside a step. `
+    +`Waiting on Design Call = ${esc(g.wait_starts_at||'Design Call Prep accept')} → call starts.`
+    +(clipped?' A bar marked with a break is longer than the axis; its label shows the real value.':'')+`</div>`;
+  wrap.innerHTML=h;
+}
+async function copyRptGrouped(btn,label){
+  const gw=document.getElementById('rptLtGroupedWrap'); const card=gw?.closest('.rpt-chart-card');
+  if(!card||typeof html2canvas!=='function'){toast('Copy not available','err');return;}
+  const hidden=[]; card.querySelectorAll('.copy-btn,.chart-settings-btn').forEach(el=>{hidden.push([el,el.style.visibility]);el.style.visibility='hidden';});
+  try{
+    const cv=await html2canvas(card,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true});
+    cv.toBlob(blob=>{
+      if(!blob){toast('Chart not ready','err');return;}
+      try{navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>_flashCopyBtn(btn)).catch(()=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${label.replace(/\s+/g,'_')}.png`;a.click();});}
+      catch(err){const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download=`${label.replace(/\s+/g,'_')}.png`;a.click();_flashCopyBtn(btn);}
+    },'image/png');
+  }finally{hidden.forEach(([el,v])=>el.style.visibility=v);}
+}
+
 // ── Copy helper for report charts ──
 function copyRptChart(canvasId, label, e){
   e.stopPropagation();
+  if(canvasId==='rptLtChart'){
+    const _gw=document.getElementById('rptLtGroupedWrap');
+    if(_gw&&_gw.style.display!=='none'&&_gw.innerHTML){copyRptGrouped(e.currentTarget,label);return;}
+  }
   const srcCanvas=document.getElementById(canvasId);
   if(!srcCanvas){toast('Chart not loaded','err');return;}
   const btn=e.currentTarget;
   const instMap={rptVolChart:()=>rptVolInst,rptWipChart:()=>rptWipInst,rptProcessChart:()=>rptProcessInst,rptLtChart:()=>rptLtInst,rptFpyChart:()=>rptFpyInst,rptOtdChart:()=>rptOtdInst,rptQtChart:()=>rptQtInst,
-    csVolChart:()=>csVolChart_,csUtilChart:()=>csUtilChart_,csFpyChart:()=>csFpyChart_,csOtdChart:()=>csOtdChart_,csWipTrendChart:()=>window._csWipTrendInst,csProcessChart:()=>window._csProcessInst,csLtChart:()=>window._csLtInst};
+    csVolChart:()=>csVolChart_,csUtilChart:()=>csUtilChart_,csFpyChart:()=>csFpyChart_,csOtdChart:()=>csOtdChart_,csWipTrendChart:()=>window._csWipTrendInst,csProcessChart:()=>window._csProcessInst,csLtChart:()=>window._csLtInst,
+    csKaMaChart:()=>csKaMaChart_,csFixChart:()=>csFixChart_};
   const chartInst=instMap[canvasId]?.();
   // Use square dimensions for doughnut charts, wider for bar/line charts
   const isDoughnut = chartInst?.config?.type === 'doughnut';
@@ -4811,6 +5037,7 @@ async function generateReport(){
     if(_selWip) chartFetches.push(fetch(`${API}/analytics/report/wip-trend?${buildRptQS({granularity:rptWipGranularity})}`).catch(()=>null).then(async r=>{tick('WIP trend loaded');return{type:'wip',data:r?.ok?await r.json():null};}));
     if(_selProc) chartFetches.push(fetch(`${API}/analytics/report/process-counts?${qs}`).catch(()=>null).then(async r=>{tick('Process counts loaded');return{type:'proc',data:r?.ok?await r.json():null};}));
     if(_selLt) chartFetches.push(fetch(`${API}/analytics/report/lt-by-step?${qs}`).catch(()=>null).then(async r=>{tick('Lead time loaded');return{type:'lt',data:r?.ok?await r.json():null};}));
+    if(_selLt) chartFetches.push(fetch(`${API}/analytics/report/lt-grouped?${qs}`).catch(()=>null).then(async r=>({type:'ltg',data:r?.ok?await r.json():null})));
     if(_selFpy) chartFetches.push(fetch(`${API}/analytics/report/fpy-by-step?${qs}`).catch(()=>null).then(async r=>{tick('FPY loaded');return{type:'fpy',data:r?.ok?await r.json():null};}));
     if(_selOtd) chartFetches.push(fetch(`${API}/analytics/report/otd?${qs}`).catch(()=>null).then(async r=>{tick('OTD loaded');return{type:'otd',data:r?.ok?await r.json():null};}));
     if(_selEff) chartFetches.push(fetch(`${API}/analytics/process-efficiency?${qs}`).catch(()=>null).then(async r=>{tick('Efficiency loaded');return{type:'eff',data:r?.ok?await r.json():null};}));
@@ -4839,6 +5066,12 @@ async function generateReport(){
     if(_selWip&&byType.wip?.data){window._rptLastWip=byType.wip.data;renderRptWipChart(byType.wip.data);}
     if(_selProc&&byType.proc?.data){window._rptLastProcess=byType.proc.data;renderRptProcessChart(byType.proc.data);}
     if(_selLt&&byType.lt?.data){window._rptLastLt=byType.lt.data.steps;renderRptLtChart(byType.lt.data.steps);}
+    if(_selLt){
+      // Shoulder only: grouped, non-overlapping breakup. Anything else (or any error) keeps the flat chart above.
+      const _g=byType.ltg?.data;
+      if(_g&&_g.supported&&_g.buckets&&_g.buckets.length){try{renderRptLtGrouped(_g);rptLtShowGrouped(true);}catch(e){console.error('grouped LT failed',e);rptLtShowGrouped(false);}}
+      else rptLtShowGrouped(false);
+    }
     if(_selFpy&&byType.fpy?.data){window._rptLastFpy=byType.fpy.data.steps;renderRptFpyChart(byType.fpy.data.steps);}
     if(_selOtd&&byType.otd?.data){window._rptLastOtd=byType.otd.data;renderRptOtdChart(byType.otd.data);}
     if(_selEff&&byType.eff?.data&&typeof renderRptProcEffChart==='function')renderRptProcEffChart(byType.eff.data);
