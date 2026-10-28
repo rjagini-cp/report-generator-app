@@ -941,7 +941,7 @@ def _wip_dp_ctes(periods_sql, vw_prod_cond):
     at each period's end date. Uses the SAME rules as the current-WIP tiles (analytics_wip), so today's point equals
     Segmentation + PSP/Design + Peer Review:
       * vw_fact_case, not deleted / canceled, Case_In_Take in the tile list, marketing surgeons excluded
-      * start = earliest of first scan upload / Scan Assessment accept / Segmentation accept
+      * start = earliest of first scan upload / Scan Assessment accept / Segmentation accept / Design Call Prep / PSP review
       * exit  = earliest of Peer Review accept / ship date
       * a case in SHIPPING / SURGERY / MANUFACTURING with no exit date is treated as already out of digital production
       * excluded while waiting on the surgeon: after PSP review (timestamped), or before PSP review while Design Call Prep
@@ -974,7 +974,9 @@ def _wip_dp_ctes(periods_sql, vw_prod_cond):
             f.id AS caseId, f.phase, COALESCE(f.onHold, false) AS on_hold_now, f.work_queue,
             LEAST(COALESCE(DATE(CAST(s.first_scan_upload_date AS TIMESTAMP)), DATE '9999-12-31'),
                   COALESCE(sa.scan_assess_date, DATE '9999-12-31'),
-                  COALESCE(sd.seg_review_date, DATE '9999-12-31')) AS start_date,
+                  COALESCE(sd.seg_review_date, DATE '9999-12-31'),
+                  COALESCE(sd.design_call_prep_date, DATE '9999-12-31'),
+                  COALESCE(sd.first_psp_review_date, DATE '9999-12-31')) AS start_date,
             CASE WHEN sd.peer_review_date IS NOT NULL AND s.ship_wrk_comp_date IS NOT NULL
                       THEN LEAST(sd.peer_review_date, DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP)))
                  WHEN sd.peer_review_date IS NOT NULL THEN sd.peer_review_date
@@ -983,7 +985,11 @@ def _wip_dp_ctes(periods_sql, vw_prod_cond):
             sd.seg_review_date, sd.first_psp_review_date, sd.surgeon_approval_date, sd.peer_review_date,
             sd.design_call_prep_date AS dcp_date, dc.call_date,
             (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL
-                 OR s.ship_wrk_comp_date IS NOT NULL) AS past_psp_now
+                 OR s.ship_wrk_comp_date IS NOT NULL) AS past_psp_now,
+            -- waiting on the surgeon before PSP review RIGHT NOW (same rule as the Surgeon Approval tile's pre-PSP path)
+            COALESCE(sd.seg_review_date IS NOT NULL
+                 AND NOT (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
+                 AND sd.design_call_prep_date IS NOT NULL AND f.work_queue = 'PLANNING_REVIEW', false) AS cur_wait
         FROM {tbl('vw_fact_case')} f
         LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON f.id = s.caseId
         LEFT JOIN signoff_dates sd ON f.id = sd.caseId
@@ -1024,13 +1030,12 @@ def _wip_dp_ctes(periods_sql, vw_prod_cond):
                    AND (b.surgeon_approval_date IS NULL OR b.surgeon_approval_date > p.period_end)
                    AND (b.peer_review_date IS NULL OR b.peer_review_date > p.period_end), false)
           AND NOT COALESCE(CASE WHEN p.period_end >= CURRENT_DATE()
-                        THEN (b.seg_review_date IS NOT NULL AND NOT b.past_psp_now AND b.dcp_date IS NOT NULL
-                              AND b.work_queue = 'PLANNING_REVIEW')
+                        THEN b.cur_wait
                         ELSE (b.dcp_date IS NOT NULL AND b.dcp_date <= p.period_end
                               AND (b.first_psp_review_date IS NULL OR b.first_psp_review_date > p.period_end)
-                              AND (b.call_date > p.period_end
-                                   OR (b.call_date IS NULL AND b.seg_review_date IS NOT NULL AND NOT b.past_psp_now
-                                       AND b.work_queue = 'PLANNING_REVIEW')))
+                              -- a case waiting on the surgeon today has been waiting since Design Call Prep;
+                              -- otherwise it waited from Design Call Prep until the call was held
+                              AND (b.cur_wait OR b.call_date > p.period_end))
                    END, false)
     )"""
 
