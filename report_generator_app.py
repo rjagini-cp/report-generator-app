@@ -946,7 +946,7 @@ def _wip_dp_ctes(periods_sql, vw_prod_cond):
       * a case in SHIPPING / SURGERY / MANUFACTURING with no exit date is treated as already out of digital production
       * excluded while waiting on the surgeon: after PSP review (timestamped), or before PSP review while Design Call Prep
         is done and the call has not happened (events for past dates; the live work_queue for today and later)
-      * on hold: the hold EVENTS for past dates, the live onHold flag for today and later
+      * on hold: the hold EVENTS for past dates (a case flagged on hold with no events at all counts as held), the live onHold flag for today and later
     Past dates are rebuilt from events; canceled / phase / intake are current-state (no history exists for them)."""
     return f"""
     {signoff_cte()},
@@ -1005,6 +1005,7 @@ def _wip_dp_ctes(periods_sql, vw_prod_cond):
         FROM {tbl('vw_event_log_rank')}
         WHERE type IN ('r3idCasePutOnHold', 'r3idCaseRemovedFromOnHold')
     ),
+    hold_cases AS (SELECT DISTINCT caseId FROM hold_events),
     hold_state AS (
         SELECT period_start, caseId, (type = 'r3idCasePutOnHold') AS is_held
         FROM (
@@ -1021,11 +1022,15 @@ def _wip_dp_ctes(periods_sql, vw_prod_cond):
         FROM periods p
         CROSS JOIN wip_base b
         LEFT JOIN hold_state h ON h.period_start = p.period_start AND h.caseId = b.caseId
+        LEFT JOIN hold_cases hc ON hc.caseId = b.caseId
         WHERE b.start_date < DATE '9999-12-31'
           AND b.start_date <= p.period_end
           AND (b.exit_date IS NULL OR b.exit_date > p.period_end)
           AND NOT (b.exit_date IS NULL AND COALESCE(b.phase, '') IN ('SHIPPING', 'SURGERY', 'MANUFACTURING'))
-          AND NOT (CASE WHEN p.period_end >= CURRENT_DATE() THEN b.on_hold_now ELSE COALESCE(h.is_held, false) END)
+          -- on hold: the hold EVENTS for past dates; a case flagged on hold today that has NO hold events at all
+          -- (the flag was set outside the event log) is treated as held on past dates too
+          AND NOT (CASE WHEN p.period_end >= CURRENT_DATE() THEN b.on_hold_now
+                        ELSE COALESCE(h.is_held, b.on_hold_now AND hc.caseId IS NULL, false) END)
           AND NOT COALESCE(b.first_psp_review_date IS NOT NULL AND b.first_psp_review_date <= p.period_end
                    AND (b.surgeon_approval_date IS NULL OR b.surgeon_approval_date > p.period_end)
                    AND (b.peer_review_date IS NULL OR b.peer_review_date > p.period_end), false)

@@ -33,6 +33,7 @@ import sys
 
 import pandas as pd
 
+VERSION = 'v5'          # if your SUMMARY.txt header does not say v4, you ran an older copy of this script
 INTAKE = ['Case Intake', 'Restor3d MedEd', 'Cody Case Intake']       # build_where_clause() default intake filter
 DATE_COLS = ['first_scan', 'ship', 'seg', 'first_psp', 'surg_app', 'peer', 'scan_assess', 'dcp', 'call']
 BOOL_COLS = ['in_view', 'deleted', 'on_hold', 'canceled', 'reject']
@@ -148,7 +149,7 @@ def normalise(cases):
     df["marketing"] = ((df["phy_nameFirst"].fillna("") + " " + df["phy_nameLast"].fillna(""))
                        .str.lower().str.contains("marketing"))
     df["exit"] = df[["peer", "ship"]].min(axis=1)                     # LEAST(peer review, ship) as the chart does
-    df["start"] = df[["first_scan", "scan_assess", "seg"]].min(axis=1)  # chart start after the fix
+    df["start"] = df[["first_scan", "scan_assess", "seg", "dcp", "first_psp"]].min(axis=1)  # chart start after the fix
     return df.set_index("caseId", drop=False)
 
 
@@ -246,11 +247,12 @@ def chart_members(df, snap, intervals, in_view_only=True):
     r = r[~surgeon_wait_at(r, snap)]
     queue = (r["work_queue"] == "PLANNING_REVIEW")
     past_psp = r["first_psp"].notna() | r["peer"].notna() | r["ship"].notna()
+    cur_wait = r["seg"].notna() & ~past_psp & r["dcp"].notna() & queue       # waiting on the surgeon right now
     if now:
-        pre = r["seg"].notna() & ~past_psp & r["dcp"].notna() & queue
+        pre = cur_wait
     else:
         pre = (r["dcp"].notna() & (r["dcp"] <= s) & (r["first_psp"].isna() | (r["first_psp"] > s))
-               & ((r["call"] > s) | (r["call"].isna() & r["seg"].notna() & ~past_psp & queue)))
+               & (cur_wait | (r["call"] > s)))
     return r[~pre].index
 
 
@@ -375,7 +377,7 @@ def main():
     df.to_csv(os.path.join(a.out, "cases_table.csv"), index=False)
 
     say("=" * 100)
-    say(f"WIP DIAGNOSTIC   month {a.month}   today = {asof.date()}   filters: product={a.product or 'all'}  case type={a.case_type or 'all'}")
+    say(f"WIP DIAGNOSTIC {VERSION}   month {a.month}   today = {asof.date()}   filters: product={a.product or 'all'}  case type={a.case_type or 'all'}")
     say("=" * 100)
 
     # ── 1. tiles ───────────────────────────────────────────────────────────────
@@ -410,6 +412,37 @@ def main():
             rows.append({"granularity": gran, "period_start": start.date(), "snapshot": end.date(), "page": pg, "old_rules": old, "new_rules": new, "reference": ref})
     pd.DataFrame(rows).to_csv(os.path.join(a.out, "chart_points.csv"), index=False)
 
+    # ── 2b. page's case list behind the latest points vs my rebuild ─────────────
+    say("\n2b) THE PAGE'S OWN CASE LIST BEHIND THE LATEST POINTS vs MY REBUILD (finds any case the page's SQL counts differently)")
+    chart_lists = (page or {}).get("chart_lists", {}) or {}
+    todo = [("weekly", e) for _, e in snaps["weekly"][-2:]]
+    for gran, end in todo:
+        key = end.strftime("%Y-%m-%d")
+        if client is not None:
+            ids, cnt = chart_list(client, gran, key, qs, (date_from, date_to))
+        else:
+            ids, cnt = chart_lists.get(key, []), len(chart_lists.get(key, []))
+        if not ids:
+            say(f"  {key}: no list available")
+            continue
+        if cnt >= 500:
+            say(f"  {key}: list truncated at 500, skipped")
+            continue
+        pset, mine = set(ids), set(chart_members(df, end, intervals))
+        pg_only, my_only = sorted(pset - mine), sorted(mine - pset)
+        say(f"  {key}: page list {len(pset)}  rebuilt {len(mine)}  -> page-only {len(pg_only)}, rebuilt-only {len(my_only)}")
+        for cid in pg_only[:5]:
+            if cid in df.index:
+                r = df.loc[cid]
+                say(f"      page-only {r['alias']}: phase={r['phase']} on_hold={r['on_hold']} intake={r['intake']} start={r['start']} dcp={r['dcp']} seg={r['seg']} "
+                    f"first_psp={r['first_psp']} peer={r['peer']} ship={r['ship']} queue={r['work_queue']}")
+            else:
+                say(f"      page-only {cid}: not in this script's pull (created / changed after it ran?)")
+        for cid in my_only[:5]:
+            r = df.loc[cid]
+            say(f"      rebuilt-only {r['alias']}: phase={r['phase']} on_hold={r['on_hold']} intake={r['intake']} start={r['start']} first_psp={r['first_psp']} queue={r['work_queue']}")
+    say("  (a page-only case that is not in the pull usually means the data moved between the page request and the pull; re-run once to check)")
+
     # ── 3. today: tiles vs chart ───────────────────────────────────────────────
     say("\n" + "-" * 100)
     say(f"3) TODAY ({asof.date()}): DIGITAL-PRODUCTION TILES vs THE CHART'S CURRENT POINT (new rules)")
@@ -439,6 +472,87 @@ def main():
     on_hold_now = int((df["in_view"] & false_(df["deleted"]) & df["intake"].isin(INTAKE) & true_(df["on_hold"])).sum())
     say(f"\n  The tile strip also holds Surgeon Approval {mine_tiles['surgeon_approval']}, Manufacturing {mine_tiles['manufacturing']}, On Hold {on_hold_now}"
         f"  -> {sum(mine_tiles.values()) + on_hold_now} in all; those are not digital production, so they are not on the chart")
+
+    # ── 3b. continuity ─────────────────────────────────────────────────────────
+    say("\n" + "-" * 100)
+    say("3b) CONTINUITY: yesterday (rebuilt from events) vs today (live flags) - the chart should not jump between them")
+    yest = set(chart_members(df, asof - pd.Timedelta(days=1), intervals))
+    dropped, added = sorted(yest - chart_now), sorted(chart_now - yest)
+    say(f"  yesterday {len(yest)} -> today {len(chart_now)}   (left {len(dropped)}, joined {len(added)})")
+    reasons_d, examples = {}, {}
+    for cid in dropped:
+        r = df.loc[cid]
+        if pd.notna(r["exit"]) and r["exit"] <= asof:
+            k = "left: peer review / ship date reached"
+        elif true_(pd.Series([r["on_hold"]])).iloc[0]:
+            k = "on hold per today's flag (hold events did not show it yesterday)"
+        elif pd.notna(r["seg"]) and pd.isna(r["first_psp"]) and pd.isna(r["peer"]) and pd.isna(r["ship"]) and pd.notna(r["dcp"]) and r["work_queue"] == "PLANNING_REVIEW":
+            k = "waiting on the surgeon per today's work queue (events did not show it yesterday)"
+        else:
+            k = "other (see the examples below)"
+        reasons_d[k] = reasons_d.get(k, 0) + 1
+        examples.setdefault(k, []).append(r)
+    for k, n in sorted(reasons_d.items(), key=lambda kv: -kv[1]):
+        say(f"      -{n:>4}  {k}")
+    for r in examples.get("other (see the examples below)", [])[:5]:
+        say(f"          e.g. {r['alias']}: start={r['start'].date() if pd.notna(r['start']) else None} dcp={r['dcp'].date() if pd.notna(r['dcp']) else None} "
+            f"call={r['call'].date() if pd.notna(r['call']) else None} psp={r['first_psp'].date() if pd.notna(r['first_psp']) else None} "
+            f"phase={r['phase']} queue={r['work_queue']} on_hold={r['on_hold']}")
+    # the same split for the last PAST weekly snapshot, so a jump larger than one day's flow is visible
+    past = [e for _, e in snaps["weekly"] if e < TODAY]
+    if past:
+        lastp = max(past)
+        a_set, b_set = set(chart_members(df, lastp, intervals)), chart_now
+        say(f"  last past weekly snapshot {lastp.date()}: {len(a_set)} -> today {len(b_set)}   (left {len(a_set - b_set)}, joined {len(b_set - a_set)})")
+    if added:
+        say(f"      +{len(added):>4}  joined (new cases / released from hold / call held)")
+    # hold activity and the cases behind "on hold per today's flag"
+    hh = holds.copy()
+    hh["ts"] = pd.to_datetime(hh["ts"], utc=True).dt.tz_localize(None)
+    last_ev = hh.sort_values("ts").groupby("caseId").tail(1).set_index("caseId")
+    held_group = [cid for cid in dropped if true_(pd.Series([df.loc[cid, "on_hold"]])).iloc[0]
+                  and not (pd.notna(df.loc[cid, "exit"]) and df.loc[cid, "exit"] <= asof)]
+    kinds = {"put on hold TODAY per the events (a real, same-day hold)": [], "flag says on hold but the last event is a release": [],
+             "flag says on hold but there are NO hold events at all": [], "held per events before today (not expected here)": []}
+    for cid in held_group:
+        if cid not in last_ev.index:
+            kinds["flag says on hold but there are NO hold events at all"].append(cid)
+        else:
+            t, ts = last_ev.loc[cid, "type"], last_ev.loc[cid, "ts"]
+            if t == "r3idCasePutOnHold" and ts.normalize() >= pd.Timestamp(asof).normalize():
+                kinds["put on hold TODAY per the events (a real, same-day hold)"].append(cid)
+            elif t == "r3idCasePutOnHold":
+                kinds["held per events before today (not expected here)"].append(cid)
+            else:
+                kinds["flag says on hold but the last event is a release"].append(cid)
+    if held_group:
+        say(f"  the {len(held_group)} cases on hold today that were not held yesterday, split by what the hold EVENTS say:")
+        for k, v in kinds.items():
+            if v:
+                ex = ", ".join(f"{df.loc[c, 'alias']}" for c in v[:3])
+                say(f"      {len(v):>4}  {k}   e.g. {ex}")
+    if held_group:
+        sub = df.loc[held_group]
+        say("  those same cases by product and case type:")
+        for col, title in (("product", "by product"), ("case_type", "by case type")):
+            vc = sub[col].fillna("(none)").value_counts().head(10)
+            say(f"      {title}: " + ", ".join(f"{k} {v}" for k, v in vc.items()))
+        allh = df[df["in_view"] & true_(df["on_hold"])]
+        vc = allh["case_type"].fillna("(none)").value_counts().head(8)
+        say(f"      for comparison, ALL {len(allh)} cases on hold today, by case type: " + ", ".join(f"{k} {v}" for k, v in vc.items()))
+        rows_h = []
+        for c in held_group:
+            le = last_ev.loc[c] if c in last_ev.index else None
+            rows_h.append({"caseId": c, "alias": df.loc[c, "alias"], "product": df.loc[c, "product"], "case_type": df.loc[c, "case_type"],
+                           "last_hold_event": None if le is None else le["type"], "last_hold_event_time": None if le is None else le["ts"]})
+        pd.DataFrame(rows_h).to_csv(os.path.join(a.out, "on_hold_today_group.csv"), index=False)
+        say(f"      list saved to {os.path.join(a.out, 'on_hold_today_group.csv')}")
+    say("  hold events per day (last 14 days):  date  put-on-hold / removed-from-hold")
+    for d in pd.date_range(end=pd.Timestamp(asof).normalize(), periods=14):
+        day = hh[hh["ts"].dt.normalize() == d]
+        say(f"      {d.date()}  {int((day['type'] == 'r3idCasePutOnHold').sum()):>3} / {int((day['type'] == 'r3idCaseRemovedFromOnHold').sum()):>3}")
+    big = len(dropped) > max(10, 0.03 * max(len(yest), 1))
+    say("  -> " + ("a jump this size means the history rules and the live flags disagree; the reasons above say where" if big else "no jump: history and today agree"))
 
     # ── 4. each snapshot: chart (new) vs reference ─────────────────────────────
     say("\n" + "-" * 100)
@@ -515,7 +629,7 @@ def main():
     say("5) THE DEFINITION (after the WIP fix)")
     say("  Tiles and chart share one rule set: vw_fact_case, not deleted / canceled, Case_In_Take in (Case Intake, Restor3d MedEd, Cody Case Intake),")
     say("  marketing surgeons excluded, not on hold, phase not SHIPPING / SURGERY / MANUFACTURING, not waiting on the surgeon (before or after PSP review).")
-    say("  Chart start = earliest of first scan upload / Scan Assessment accept / Segmentation accept; exit = peer review accept or ship date.")
+    say("  Chart start = earliest of first scan upload / Scan Assessment accept / Segmentation accept / Design Call Prep / PSP review; exit = peer review accept or ship date.")
     say("  Past dates use sign-off dates plus hold and design-call events; today's point uses the live flags, so it equals the tiles.")
     open(os.path.join(a.out, "SUMMARY.txt"), "w", encoding="utf-8").write("\n".join(SNAP_OUT))
     say(f"\nWrote CSVs and SUMMARY.txt to {os.path.abspath(a.out)}")
