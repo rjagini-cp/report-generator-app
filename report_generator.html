@@ -436,6 +436,66 @@
 .ltg-axt{text-align:center;font-size:11px;color:#6b7280;margin:0 0 6px 180px}
 .ltg-note{font-size:10px;color:var(--text-4,#6b7280);margin-top:6px;line-height:1.45}
 </style>
+<style>
+/* ═══ Report layout v2: two stacked columns ═══ */
+.rpt-cols{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+.rpt-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.rpt-col>.rpt-chart-card{margin-bottom:0;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+.rpt-std{height:340px}
+.rpt-tall{height:694px}
+.rpt-col>.rpt-chart-card .rpt-chart-wrap,.rpt-col>.rpt-chart-card .rpt-chart-wrap-tall{flex:1 1 auto;min-height:0;height:auto;position:relative}
+.rpt-std .logic-caption{font-size:9px;line-height:1.35;margin-top:4px}
+.rpt-std .rpt-chart-title{margin-bottom:6px}
+@media(max-width:1100px){.rpt-cols{flex-direction:column}.rpt-std{height:auto;min-height:340px}.rpt-tall{height:auto;min-height:694px}}
+/* volume: case-type legend for the nested bars */
+.vol-legend{font-size:10px;color:var(--text-3);margin:0 0 4px;display:none;flex-wrap:wrap;gap:2px 12px}
+.vol-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+/* Lead Time card: case-type dropdown + compact rows so all 13 steps fit */
+.ltg-dd{position:absolute;right:150px;top:6px;z-index:30}
+.ltg-dd-btn{border:1px solid var(--accent);border-radius:6px;padding:3px 28px 3px 10px;font-size:11px;background:#fff;color:var(--text-1);cursor:pointer;position:relative;height:26px;white-space:nowrap}
+.ltg-dd-btn .ltg-dd-lbl{color:var(--text-4);margin-right:6px;font-size:10px}
+.ltg-caret{position:absolute;right:9px;top:10px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #6b7280}
+.ltg-dd-panel{display:none;position:absolute;right:0;top:32px;width:360px;background:#fff;border:1px solid var(--border-dark);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px}
+.ltg-dd-panel.open{display:block}
+.ltg-dd-search input{width:100%;box-sizing:border-box;border:1px solid var(--border-dark);border-radius:6px;padding:5px 8px;font-size:11px;margin-bottom:6px}
+.ltg-dd-row{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:11px;cursor:pointer}
+.ltg-dd-row .nm{flex:1}.ltg-dd-row .cnt{color:var(--text-4)}
+.ltg-dd-row input{accent-color:#0b73c2}
+.ltg-dd-foot{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);margin-top:6px;padding-top:6px;font-size:10px;color:var(--text-4)}
+.ltg-dd-all{background:none;border:none;color:#0b73c2;font-weight:700;font-size:10px;cursor:pointer}
+.ltg-ctypes{font-size:11px;color:#374151;margin:0 0 6px;padding:4px 8px;background:#f8fafc;border-left:3px solid var(--accent)}
+#rptLtGroupedWrap{flex:1 1 auto;min-height:0;display:none;flex-direction:column}
+#rptLtGroupedWrap .ltg-note{margin-top:auto}
+.rpt-tall .ltg-row{height:20px}.rpt-tall .ltg-bar{top:3px;height:14px}.rpt-tall .ltg-val{line-height:20px}
+.rpt-tall .ltg-hdr{margin-top:6px;padding:3px 0 3px 8px;font-size:12px}.rpt-tall .ltg-hdr span{font-size:11px}
+.rpt-tall .ltg-lbl{font-size:11px}.rpt-tall .ltg-total{margin:2px 0 1px;font-size:12px}.rpt-tall .ltg-sub{margin:0 0 3px;font-size:10px}
+.rpt-tall .ltg-legend{margin:2px 0 4px;font-size:11px;gap:3px 14px}.rpt-tall .ltg-sum{height:26px}.rpt-tall .ltg-sumlbl{margin:2px 0 4px}
+.rpt-tall .ltg-axis{height:14px}.rpt-tall .ltg-axt{margin:0 0 2px 180px;font-size:10px}.rpt-tall .ltg-note{font-size:9px;margin-top:3px;line-height:1.35}
+/* On-Time Delivery combined card (donut + trend) */
+.otd-top{display:flex;align-items:center;justify-content:center;gap:28px;padding:4px 0}
+.otd-donut{width:230px;height:230px;position:relative;flex:0 0 auto}
+.otd-stats{display:flex;flex-direction:column;gap:6px}
+.otd-stats .rpt-stat{padding:0;flex:none;min-width:0}
+.otd-def{font-size:10px;color:var(--text-4);line-height:1.45;margin:4px 0 6px}
+.otd-trend-hdr{font-size:12px;font-weight:700;color:var(--text-2);border-top:1px solid var(--border);padding-top:8px;margin-top:2px}
+.otd-trend-wrap{flex:1 1 auto;min-height:0;position:relative;margin-top:4px}
+.otd-trend-note{font-size:9px;color:var(--text-4);margin-top:4px}
+/* Surgical Plan User filter */
+#dd-rptPspUser{min-width:400px;right:auto}
+.psp-quick{padding:6px 10px 2px;font-size:10px;color:var(--text-4);border-bottom:1px solid var(--border)}
+.psp-quick button{border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent-dark);border-radius:12px;padding:2px 10px;margin:4px 6px 4px 0;font-size:10px;font-weight:600;cursor:pointer}
+.psp-quick button.us{border-color:var(--border-dark);background:#f8fafc;color:var(--text-2)}
+.psp-quick button.on{background:var(--accent-dark);color:#fff}
+#list-rptPspUser{max-height:260px}
+.psp-nm{flex:1}
+.psp-team{font-size:9px;background:#f1f5f9;color:#6b7280;border-radius:8px;padding:1px 8px;white-space:nowrap}
+.psp-cnt{width:34px;text-align:right;color:var(--text-4)}
+.psp-sorted{font-size:9px;color:var(--text-4);padding:4px 10px 0}
+.psp-notice{display:none;font-size:11px;color:#8a5a00;background:#fff7e6;border:1px solid #f5c26b;border-radius:6px;padding:5px 10px;margin:8px 0 0}
+.vol-prev{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3);cursor:pointer;user-select:none}
+.vol-prev input{accent-color:var(--accent-dark)}
+.vol-prev.disabled{opacity:.45;cursor:not-allowed}
+</style>
 </head>
 <body>
 <div class="loading-overlay" id="loadingOverlay">
@@ -659,6 +719,12 @@
             <button class="ms-btn" onclick="toggleDD('rptCaseType')"><span class="ms-btn-text" id="lbl-rptCaseType">All Types</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptCaseType" onclick="clearDD('rptCaseType',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
             <div class="ms-dropdown" id="dd-rptCaseType"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptCaseType',this.value)"/></div><div class="ms-list" id="list-rptCaseType"><div style="padding:10px;color:var(--text-4);font-size:11px">Select a product first</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptCaseType">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptCaseType',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptCaseType')">All</button></div></div></div>
           </div>
+          <!-- Surgical Plan User (final plan reviewer) -->
+          <div class="ms-wrap" id="rptPspWrap">
+            <div class="ms-label">Surgical Plan User</div>
+            <button class="ms-btn" onclick="rptPspOpen()"><span class="ms-btn-text" id="lbl-rptPspUser">All reviewers</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptPspUser" onclick="clearDD('rptPspUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
+            <div class="ms-dropdown" id="dd-rptPspUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptPspUser',this.value)"/></div><div class="psp-quick" id="pspQuick" style="display:none"></div><div class="psp-sorted">Sorted by cases completed, highest first</div><div class="ms-list" id="list-rptPspUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Open to load reviewers</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptPspUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptPspUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptPspUser')">All</button></div></div></div>
+          </div>
           <!-- Granularity -->
           <div class="ms-wrap">
             <div class="ms-label">Trend Granularity</div>
@@ -669,6 +735,7 @@
           </div>
         </div>
 
+        <div class="psp-notice" id="rptPspNotice"><i class="fa fa-user-check"></i> <span id="rptPspNoticeTxt"></span></div>
         <!-- More Filters (rarely used) — Surgeon, Facility, State, Case Flags, collapsed by default -->
         <div class="adv-toggle" id="rptMoreToggle" onclick="toggleRptMoreFilters()" style="margin-top:8px"><i class="fa fa-chevron-down"></i><span>More Filters</span></div>
         <div class="adv-filters" id="rptMoreFilters" style="display:none">
@@ -804,11 +871,10 @@
           </div>
 
           <!-- ── Volume & Pipeline ── -->
-          <div class="rpt-section-hdr"><i class="fa fa-chart-bar"></i> Volume &amp; Pipeline</div>
-          <div class="rpt-grid-2">
-
-            <!-- Volume chart -->
-            <div class="rpt-chart-card" style="position:relative">
+          <!-- ── Report charts: two stacked columns ── -->
+          <div class="rpt-cols" id="rptCols">
+            <div class="rpt-col" id="rptColLeft">
+              <div class="rpt-chart-card rpt-std" id="rptCard_vol" style="position:relative">
               <button class="copy-btn" id="rcs_cpbtn_rptVolChart" onclick="copyRptChart('rptVolChart','Case Submission vs Completion',event)"><i class="fa fa-copy"></i> Copy</button>
               <button class="chart-settings-btn rcs-btn" id="rcs_btn_rptVolChart" onclick="toggleRptSettings('rptVolChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
               <div class="rpt-chart-title"><i class="fa fa-chart-bar"></i> Case Submission vs. Completion</div>
@@ -832,40 +898,14 @@
                 <button class="chart-toggle active" id="rptVolMonthlyBtn" onclick="setRptVolGran('monthly',this)">Monthly</button>
                 <button class="chart-toggle" id="rptVolTotalBtn" onclick="setRptVolGran('total',this)">Total</button>
                 <button class="chart-drill-btn" id="rptVolDrillUp" onclick="rptVolDrillUp()"><i class="fa fa-arrow-left"></i> Back to Monthly</button>
+                <label class="vol-prev" id="rptVolPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="rptVolPrevChk" onchange="setRptVolPrev(this.checked)"/> Show previous 3 months</label>
               </div>
+              <div class="vol-legend" id="rptVolTypeLegend"></div>
               <div class="rpt-chart-wrap"><canvas id="rptVolChart"></canvas></div>
-              <div class="logic-caption">Submitted = cases with first scan upload in range. Completed = cases with first PSP reviewer accept in range. Click a bar to view those cases.</div>
+              <div class="logic-caption">Submitted = cases with first scan upload in range. Completed = cases with first PSP reviewer accept in range. Click a bar to view those cases; click an inner bar for one case type. Thin bars inside each bar = the selected case types.</div>
             </div>
 
-            <!-- WIP Trend chart -->
-            <div class="rpt-chart-card" style="position:relative">
-              <button class="copy-btn" id="rcs_cpbtn_rptWipChart" onclick="copyRptChart('rptWipChart','Digital Production WIP Trend',event)"><i class="fa fa-copy"></i> Copy</button>
-              <button class="chart-settings-btn rcs-btn" id="rcs_btn_rptWipChart" onclick="toggleRptSettings('rptWipChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
-              <div class="rpt-chart-title"><i class="fa fa-stream"></i> Digital Production WIP Trend</div>
-              <div class="chart-settings-panel rcs-panel" id="rcs_panel_rptWipChart">
-                <div class="cs-field"><label>WIP Color</label><input type="color" id="rcs_color_rptWipChart" value="#005F72"/></div>
-                <div class="cs-field"><label>Avg Color</label><input type="color" id="rcs_color2_rptWipChart" value="#008EAA"/></div>
-                <div class="cs-field"><label>Label Size</label><input type="number" id="rcs_dlsize_rptWipChart" value="10" min="6" max="20" style="width:55px"/></div>
-                <div class="cs-field"><label>Tick Size</label><input type="number" id="rcs_ticksize_rptWipChart" value="10" min="6" max="20" style="width:55px"/></div>
-                <div class="cs-field"><label>Show Legend</label><input type="checkbox" id="rcs_showlegend_rptWipChart" checked/></div>
-                <button class="cs-apply-btn" onclick="applyRptChartSettings('rptWipChart')"><i class="fa fa-check"></i> Apply</button>
-                <button class="cs-reset-btn" onclick="resetRptChartSettings('rptWipChart')"><i class="fa fa-undo"></i> Reset</button>
-              </div>
-              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-                <button class="chart-toggle active" id="rptWipWeeklyBtn" onclick="setRptWipGran('weekly',this)">Weekly</button>
-                <button class="chart-toggle" id="rptWipMonthlyBtn" onclick="setRptWipGran('monthly',this)">Monthly</button>
-              </div>
-              <div class="rpt-chart-wrap"><canvas id="rptWipChart"></canvas></div>
-              <div class="logic-caption">Cases in digital production pipeline (Scan Assessment → Peer Review) at end of each period. A case exits WIP when its peer review date falls before the period end — regardless of current phase. Excludes on-hold and marketing surgeon cases at every snapshot. Click a point to view cases in that snapshot.</div>
-            </div>
-          </div>
-
-          <!-- ── Process Performance ── -->
-          <div class="rpt-section-hdr"><i class="fa fa-layer-group"></i> Process Performance</div>
-          <div class="rpt-grid-2">
-
-            <!-- Process counts -->
-            <div class="rpt-chart-card" style="position:relative">
+              <div class="rpt-chart-card rpt-std" id="rptCard_proc" style="position:relative">
               <button class="copy-btn" id="rcs_cpbtn_rptProcessChart" onclick="copyRptChart('rptProcessChart','Completed Cases Per Process',event)"><i class="fa fa-copy"></i> Copy</button>
               <button class="chart-settings-btn rcs-btn" id="rcs_btn_rptProcessChart" onclick="toggleRptSettings('rptProcessChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
               <div class="rpt-chart-title"><i class="fa fa-tasks"></i> Completed Cases Per Process</div>
@@ -885,11 +925,18 @@
               <div style="font-size:9px;color:var(--text-4);margin-top:4px"><i class="fa fa-info-circle"></i> Reviewer / Approver ACCEPT signoffs per step in the selected period</div>
             </div>
 
-            <!-- Lead Time by Step -->
-            <div class="rpt-chart-card" style="position:relative">
+              <div class="rpt-chart-card rpt-tall" id="rptCard_lt" style="position:relative">
               <button class="copy-btn" id="rcs_cpbtn_rptLtChart" onclick="copyRptChart('rptLtChart','Lead Time by Step',event)"><i class="fa fa-copy"></i> Copy</button>
               <button class="chart-settings-btn rcs-btn" id="rcs_btn_rptLtChart" onclick="toggleRptSettings('rptLtChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
               <div class="rpt-chart-title"><i class="fa fa-clock"></i> Lead Time by Step (Calendar Days)</div>
+              <div class="ltg-dd" id="ltgDd" style="display:none">
+                <button class="ltg-dd-btn" id="ltgDdBtn" onclick="ltgToggleDd(event)"><span class="ltg-dd-lbl">Case types</span><b id="ltgDdTxt">—</b><span class="ltg-caret"></span></button>
+                <div class="ltg-dd-panel" id="ltgDdPanel" onclick="event.stopPropagation()">
+                  <div class="ltg-dd-search"><input placeholder="Search..." oninput="ltgDdFilter(this.value)"/></div>
+                  <div id="ltgDdList"></div>
+                  <div class="ltg-dd-foot"><span id="ltgDdCnt"></span><button class="ltg-dd-all" onclick="ltgSelectAll()">Select all</button></div>
+                </div>
+              </div>
               <div class="chart-settings-panel rcs-panel" id="rcs_panel_rptLtChart">
                 <div class="cs-field"><label>Bar Color</label><input type="color" id="rcs_color_rptLtChart" value="#005F72"/></div>
                 <div class="cs-field"><label>Bar Width <span id="rcs_barwidth_val_rptLtChart">55</span>%</label><input type="range" id="rcs_barwidth_rptLtChart" min="10" max="100" value="55" oninput="document.getElementById('rcs_barwidth_val_rptLtChart').textContent=this.value"/></div>
@@ -902,16 +949,32 @@
               <div class="rpt-chart-wrap-tall"><canvas id="rptLtChart"></canvas></div>
               <div id="rptLtGroupedWrap" style="display:none"></div>
               <div class="logic-caption" id="rptLtCaption">Average calendar days from previous step's effective completion to this step's effective completion. Peer Review excludes surgeon wait. Population per step matches the Completed Cases chart. Click a bar to view cases.</div>
-              <div style="font-size:9px;color:var(--text-4);margin-top:4px"><i class="fa fa-info-circle"></i> Sub-step LTs scaled from Digital Production LT · Surgeon Approval drawn directly from KPI</div>
+              <div id="rptLtInfo" style="font-size:9px;color:var(--text-4);margin-top:4px"><i class="fa fa-info-circle"></i> Sub-step LTs scaled from Digital Production LT · Surgeon Approval drawn directly from KPI</div>
             </div>
-          </div>
+            </div>
+            <div class="rpt-col" id="rptColRight">
+              <div class="rpt-chart-card rpt-std" id="rptCard_wip" style="position:relative">
+              <button class="copy-btn" id="rcs_cpbtn_rptWipChart" onclick="copyRptChart('rptWipChart','Digital Production WIP Trend',event)"><i class="fa fa-copy"></i> Copy</button>
+              <button class="chart-settings-btn rcs-btn" id="rcs_btn_rptWipChart" onclick="toggleRptSettings('rptWipChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
+              <div class="rpt-chart-title"><i class="fa fa-stream"></i> Digital Production WIP Trend</div>
+              <div class="chart-settings-panel rcs-panel" id="rcs_panel_rptWipChart">
+                <div class="cs-field"><label>WIP Color</label><input type="color" id="rcs_color_rptWipChart" value="#005F72"/></div>
+                <div class="cs-field"><label>Avg Color</label><input type="color" id="rcs_color2_rptWipChart" value="#008EAA"/></div>
+                <div class="cs-field"><label>Label Size</label><input type="number" id="rcs_dlsize_rptWipChart" value="10" min="6" max="20" style="width:55px"/></div>
+                <div class="cs-field"><label>Tick Size</label><input type="number" id="rcs_ticksize_rptWipChart" value="10" min="6" max="20" style="width:55px"/></div>
+                <div class="cs-field"><label>Show Legend</label><input type="checkbox" id="rcs_showlegend_rptWipChart" checked/></div>
+                <button class="cs-apply-btn" onclick="applyRptChartSettings('rptWipChart')"><i class="fa fa-check"></i> Apply</button>
+                <button class="cs-reset-btn" onclick="resetRptChartSettings('rptWipChart')"><i class="fa fa-undo"></i> Reset</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                <button class="chart-toggle active" id="rptWipWeeklyBtn" onclick="setRptWipGran('weekly',this)">Weekly</button>
+                <button class="chart-toggle" id="rptWipMonthlyBtn" onclick="setRptWipGran('monthly',this)">Monthly</button>
+              </div>
+              <div class="rpt-chart-wrap"><canvas id="rptWipChart"></canvas></div>
+              <div class="logic-caption">Cases in digital production pipeline (Scan Assessment → Peer Review) at end of each period. A case exits WIP when its peer review date falls before the period end — regardless of current phase. Excludes on-hold and marketing surgeon cases at every snapshot. Click a point to view cases in that snapshot.</div>
+            </div>
 
-          <!-- ── Quality & Delivery ── -->
-          <div class="rpt-section-hdr"><i class="fa fa-medal"></i> Quality &amp; Delivery</div>
-          <div class="rpt-grid-2">
-
-            <!-- FPY by Step -->
-            <div class="rpt-chart-card" style="position:relative">
+              <div class="rpt-chart-card rpt-std" id="rptCard_fpy" style="position:relative">
               <button class="copy-btn" id="rcs_cpbtn_rptFpyChart" onclick="copyRptChart('rptFpyChart','FPY by Step',event)"><i class="fa fa-copy"></i> Copy</button>
               <button class="chart-settings-btn rcs-btn" id="rcs_btn_rptFpyChart" onclick="toggleRptSettings('rptFpyChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
               <div class="rpt-chart-title"><i class="fa fa-check-circle"></i> First Pass Yield by Step</div>
@@ -928,9 +991,8 @@
               <div class="logic-caption">% of cases that passed each step on the first review. Pass = reviewer's first signoff was ACCEPT. Cases implicitly complete via a later step also count as pass. Population per step matches the Completed Cases chart. Click a bar to view cases.</div>
             </div>
 
-            <!-- OTD Donut -->
-            <div class="rpt-chart-card" style="position:relative">
-              <button class="copy-btn" id="rcs_cpbtn_rptOtdChart" onclick="copyRptChart('rptOtdChart','On-Time Delivery',event)"><i class="fa fa-copy"></i> Copy</button>
+              <div class="rpt-chart-card rpt-tall" id="rptCard_otd" style="position:relative">
+              <button class="copy-btn" id="rcs_cpbtn_rptOtdChart" onclick="copyRptCardEl(this,'On-Time Delivery','rptCard_otd')"><i class="fa fa-copy"></i> Copy</button>
               <button class="chart-settings-btn rcs-btn" id="rcs_btn_rptOtdChart" onclick="toggleRptSettings('rptOtdChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
               <div class="rpt-chart-title"><i class="fa fa-bullseye"></i> Digital Production On-Time Delivery</div>
               <div class="chart-settings-panel rcs-panel" id="rcs_panel_rptOtdChart">
@@ -943,21 +1005,23 @@
                 <button class="cs-apply-btn" onclick="applyRptChartSettings('rptOtdChart')"><i class="fa fa-check"></i> Apply</button>
                 <button class="cs-reset-btn" onclick="resetRptChartSettings('rptOtdChart')"><i class="fa fa-undo"></i> Reset</button>
               </div>
-              <div class="rpt-donut-wrap" style="flex-direction:column;gap:8px;align-items:center;justify-content:center;padding:10px 0">
-                <div style="width:220px;height:220px;position:relative">
-                  <canvas id="rptOtdChart" style="width:220px!important;height:220px!important"></canvas>
-                </div>
-                <div class="rpt-stat-row" style="justify-content:center">
+              <div class="otd-top">
+                <div class="otd-donut"><canvas id="rptOtdChart"></canvas></div>
+                <div class="otd-stats">
                   <div class="rpt-stat"><div class="rpt-stat-val" id="rptOtdPct">—</div><div class="rpt-stat-lbl">On Time %</div></div>
                   <div class="rpt-stat"><div class="rpt-stat-val" style="color:#16a34a" id="rptOtdYes">—</div><div class="rpt-stat-lbl">On Time</div></div>
                   <div class="rpt-stat"><div class="rpt-stat-val" style="color:#E05A4E" id="rptOtdNo">—</div><div class="rpt-stat-lbl">Delayed</div></div>
                 </div>
-                <div style="font-size:9px;color:var(--text-4);text-align:center" id="rptOtdTarget">—</div>
-                <div class="logic-caption" style="text-align:left">Denominator = all cases with effective PSP completion in range (matches Case Volume KPI). On Time = digital LT ≤ 14 days, or implicit PSP cases (no real PSP reviewer accept — assumed on time). Delayed = real PSP reviewer accept AND digital LT > 14 days. Digital LT = PSP reviewer accept − scan upload − surgeon wait − on-hold days. Click a segment to view cases.</div>
               </div>
+              <div class="otd-def" id="rptOtdDefText">—</div>
+              <div style="font-size:9px;color:var(--text-4);display:none" id="rptOtdTarget">—</div>
+              <div class="otd-trend-hdr" id="rptOtdTrendHdr">Trend — selected period and the 3 months before it</div>
+              <div class="otd-trend-wrap"><canvas id="rptOtdTrendChart"></canvas></div>
+              <div class="otd-trend-note" id="rptOtdTrendNote"></div>
             </div>
+            </div>
+          </div><!-- /rpt-cols -->
 
-          </div><!-- /Quality row -->
 
           <!-- ── Optional: Process Efficiency + Exclusion Breakdown ── -->
           <div class="rpt-section-hdr" id="rptSecHdr_rptProcEffChart" style="display:none"><i class="fa fa-tachometer-alt"></i> Process Efficiency &amp; Exclusions</div>
@@ -1482,7 +1546,7 @@ let PRODUCTS=[],PRODUCT_GROUPS_LIVE={},CLEARED_LIVE=[],CUSTOM_LIVE=[];
 const LAT_OPTS=[{val:'RIGHT',lbl:'Right'},{val:'LEFT',lbl:'Left'},{val:'BILATERAL',lbl:'Bilateral'},{val:'NA',lbl:'Not Available'}];
 const FLAG_OPTS=[{val:'surgery_scheduled',lbl:'Surgery Scheduled'},{val:'oncology',lbl:'Oncology'},{val:'trauma',lbl:'Trauma'},{val:'pediatric',lbl:'Pediatric'},{val:'preop',lbl:'Pre-op Planning Only'},{val:'research',lbl:'Research Case'}];
 const REG_OPTS=[{val:'Cleared',lbl:'Cleared'},{val:'Custom',lbl:'Custom'}];
-const SEL={productGroup:[],productName:[],regulatory:[],laterality:[],flags:[],step:[],stepUser:[],csStep:[],csUser:[],caseType:[],nlqProductGroup:[],nlqProductName:[],nlqCaseType:[],nlqStep:[],nlqStepUser:[]};
+const SEL={productGroup:[],productName:[],regulatory:[],laterality:[],flags:[],step:[],stepUser:[],csStep:[],csUser:[],caseType:[],rptPspUser:[],nlqProductGroup:[],nlqProductName:[],nlqCaseType:[],nlqStep:[],nlqStepUser:[]};
 let userRoleFilter='worker'; // 'worker' (Designed) or 'reviewer' (Reviewed). Only sent to backend when a user is selected.
 function setUserRole(role,btn){
   userRoleFilter=role;
@@ -3260,10 +3324,10 @@ function onCheck(id,val,checked){
   if(id==='productName'){clearTimeout(window._caseTypeTimer);window._caseTypeTimer=setTimeout(loadCaseTypes,300);}
 }
 function clearDD(id,e){if(e){e.stopPropagation();e.preventDefault();}SEL[id]=[];document.getElementById(`list-${id}`)?.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=false);updateLabel(id);updateCount(id);updateClearBtn(id);document.getElementById(`dd-${id}`)?.classList.remove('open');document.getElementById(`dd-${id}`)?.previousElementSibling?.classList.remove('open');}
-const LBLS={productGroup:'All Groups',productName:'All Products',regulatory:'All',laterality:'All',flags:'All Cases',step:'All Steps',stepUser:'All Users',csStep:'All Steps',csUser:'All Users',caseType:'All Types'};
+const LBLS={productGroup:'All Groups',productName:'All Products',regulatory:'All',laterality:'All',flags:'All Cases',step:'All Steps',stepUser:'All Users',csStep:'All Steps',csUser:'All Users',caseType:'All Types',rptPspUser:'All reviewers'};
 function updateLabel(id){const sel=SEL[id],lbl=document.getElementById(`lbl-${id}`);if(!lbl)return;if(!sel||sel.length===0)lbl.textContent=LBLS[id]||'All';else if(sel.length===1)lbl.textContent=sel[0].length>24?sel[0].slice(0,22)+'...':sel[0];else lbl.textContent=`${sel.length} selected`;}
 function updateCount(id){const c=document.getElementById(`cnt-${id}`);if(c)c.textContent=`${(SEL[id]||[]).length} selected`;}
-function updateClearBtn(id){const btn=document.getElementById(`clr-${id}`);if(btn)btn.classList.toggle('show',SEL[id]?.length>0);}
+function updateClearBtn(id){if(id==='rptPspUser'&&typeof rptPspUpdateNotice==='function')rptPspUpdateNotice();const btn=document.getElementById(`clr-${id}`);if(btn)btn.classList.toggle('show',SEL[id]?.length>0);}
 function filterList(id,q){document.getElementById(`list-${id}`)?.querySelectorAll('.ms-item').forEach(item=>{item.style.display=item.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 function selectAll(id){document.getElementById(`list-${id}`)?.querySelectorAll('input[type=checkbox]').forEach(cb=>{if(!cb.checked){cb.checked=true;onCheck(id,cb.value,true);}});}
 function clearAllFilters(){Object.keys(SEL).forEach(id=>{SEL[id]=[];const lbl=document.getElementById('lbl-'+id);if(lbl)lbl.textContent=id==='step'?'All Steps':id==='stepUser'?'All Users':lbl.textContent;clearDD(id,null);});['f-surgeon','f-facility','f-state'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});dateFrom='';dateTo='';isAllTime=false;document.getElementById('dateFrom').value='';document.getElementById('dateTo').value='';document.querySelectorAll('.date-preset').forEach(e=>e.classList.remove('active'));document.getElementById('customDateRow').classList.remove('show');document.getElementById('monthPickerRow').classList.remove('show');loadCaseTypes();toast('All filters cleared');}
@@ -3998,7 +4062,7 @@ function applyRptMonthPicker(){
   rptIsAllTime=false;
 }
 function clearReportFilters(){
-  ['rptProductGroup','rptProductName','rptCaseType','rptFlags'].forEach(id=>{
+  ['rptProductGroup','rptProductName','rptCaseType','rptFlags','rptPspUser'].forEach(id=>{
     SEL[id]=[]; const lbl=document.getElementById('lbl-'+id); if(lbl)lbl.textContent=LBLS[id]||'All'; clearDD(id,null);
   });
   ['rpt-surgeon','rpt-facility','rpt-state'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -4137,7 +4201,8 @@ function buildRptQS(extras={}){
   SEL.rptFlags.forEach(fl=>params.append(fl,'true'));
   if(SEL.rptStep?.length)params.append('step',SEL.rptStep.join(','));
   if(SEL.rptStepUser?.length)params.append('step_user',SEL.rptStepUser.join(','));
-  Object.entries(extras).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')params.append(k,v);});
+  if(SEL.rptPspUser?.length)params.append('psp_user',SEL.rptPspUser.join('|'));
+  Object.entries(extras).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!==''){if(['date_from','date_to','case_type'].includes(k))params.set(k,v);else params.append(k,v);}});
   return params.toString();
 }
 
@@ -4204,7 +4269,7 @@ async function fetchRptOnHoldCases(){
 //   period: 'YYYY-Wnn' for weekly, 'total' for total mode
 //   datasetIdx: 0 = Submitted (scan upload), 1 = Completed (PSP review)
 //   mode: 'weekly' or 'total'
-async function fetchRptVolCases(period, datasetIdx, mode){
+async function fetchRptVolCases(period, datasetIdx, mode, caseType){
   // Map dataset to the milestone field used as the case date anchor
   const isSubmitted = datasetIdx === 0;
   const milestoneField = isSubmitted ? 's.first_scan_upload_date' : 'sd.first_psp_review_date';
@@ -4218,6 +4283,7 @@ async function fetchRptVolCases(period, datasetIdx, mode){
     const toInput=document.getElementById('rptDateTo')?.value||rptDateTo;
     from = fromInput;
     to = toInput;
+    if(period === 'prev3' && rptVolPriorRange){ from = rptVolPriorRange.from; to = rptVolPriorRange.to; }
   } else if(mode === 'monthly'){
     // Period format: 'YYYY-MM-DD' (first day of month from DATE_TRUNC)
     const d = new Date(period + 'T00:00:00Z');
@@ -4226,6 +4292,9 @@ async function fetchRptVolCases(period, datasetIdx, mode){
     to = lastDay.toISOString().slice(0,10);
   } else if(mode === 'weekly'){
     // Period format: 'YYYY-Wnn'. Convert to date range (Mon → Sun)
+    if(/^\d{4}-\d{2}-\d{2}$/.test(period)){
+      from = period; const e = new Date(period + 'T00:00:00Z'); e.setUTCDate(e.getUTCDate()+6); to = e.toISOString().slice(0,10);
+    } else {
     const match = period.match(/^(\d{4})-W(\d{2})$/);
     if(!match){toast('Invalid week format','err');return;}
     const year = parseInt(match[1], 10);
@@ -4238,6 +4307,7 @@ async function fetchRptVolCases(period, datasetIdx, mode){
     const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
     from = monday.toISOString().slice(0,10);
     to = sunday.toISOString().slice(0,10);
+    }
   }
 
   showLoading(`Fetching ${label} cases...`);
@@ -4246,7 +4316,7 @@ async function fetchRptVolCases(period, datasetIdx, mode){
     let res, data;
     if(!isSubmitted){
       // Completed bar — use report/volume with fetch_cases=true for correct effective PSP logic
-      const qs = buildRptQS({date_from:from, date_to:to, fetch_cases:'true'});
+      const qs = buildRptQS({date_from:from, date_to:to, fetch_cases:'true', case_type:caseType});
       res = await fetch(`${API}/analytics/report/volume?${qs}`);
       data = res.ok ? await res.json() : null;
     } else {
@@ -4254,14 +4324,14 @@ async function fetchRptVolCases(period, datasetIdx, mode){
       // matches /analytics/trends exactly (raw Case table, includes COMPLETED cases).
       // Previously used /analytics/cases (vw_fact_case), which excludes COMPLETED-phase
       // cases and undercounted vs. the chart total.
-      const qs = buildRptQS({date_from:from, date_to:to, fetch_cases:'true', date_field:'first_scan_upload_date'});
+      const qs = buildRptQS({date_from:from, date_to:to, fetch_cases:'true', date_field:'first_scan_upload_date', case_type:caseType});
       res = await fetch(`${API}/analytics/report/volume?${qs}`);
       data = res.ok ? await res.json() : null;
     }
     if(data?.cases){
-      const title = mode==='total'
-        ? `Volume: ${label}`
-        : `Volume: ${label} - ${from} to ${to}`;
+      const title = (mode==='total'
+        ? `Volume: ${label}${period==='prev3'?' - previous 3 months':''}`
+        : `Volume: ${label} - ${from} to ${to}`) + (caseType?` - ${rptVolTypeName(caseType)}`:'');
       loadCasesIntoTable(data.cases, title, `${data.count} cases - ${from} to ${to}`, false);
     } else {
       toast('No cases found','err');
@@ -4468,25 +4538,362 @@ function renderRptQtChart(data){
 }
 
 function destroyRptCharts(){
-  [rptVolInst,rptWipInst,rptProcessInst,rptLtInst,rptFpyInst,rptOtdInst,rptProcEffInst,rptExclInst,rptQtInst].forEach(c=>{if(c){try{c.destroy();}catch(e){}}});
-  rptVolInst=rptWipInst=rptProcessInst=rptLtInst=rptFpyInst=rptOtdInst=rptProcEffInst=rptExclInst=rptQtInst=null;
+  [rptVolInst,rptWipInst,rptProcessInst,rptLtInst,rptFpyInst,rptOtdInst,rptOtdTrendInst,rptProcEffInst,rptExclInst,rptQtInst].forEach(c=>{if(c){try{c.destroy();}catch(e){}}});
+  rptVolInst=rptWipInst=rptProcessInst=rptLtInst=rptFpyInst=rptOtdInst=rptOtdTrendInst=rptProcEffInst=rptExclInst=rptQtInst=null; rptVolNest=null;
 }
 
-// ── Lead Time GROUPED breakup (shoulder) ──
-// Data: /analytics/report/lt-grouped. Plain HTML/CSS bars (no canvas) so html2canvas captures it for the PDF export.
+// ══════════════════════════════════════════════════════════════
+//  LEAD TIME GROUPED (shoulder & ankle): per-case rows -> client-side regroup by case type
+// ══════════════════════════════════════════════════════════════
+let ltgPayload=null, ltgSel=null;     // ltgSel: Set of case-type indexes that are ticked
+function ltgQuantile(sorted,q){          // numpy.quantile 'linear' (same lerp formula, so the last bit matches)
+  if(!sorted.length)return null;
+  const pos=(sorted.length-1)*q, lo=Math.floor(pos), hi=Math.ceil(pos), t=pos-lo;
+  const a=sorted[lo], b=sorted[hi], d=b-a;
+  return t>=0.5?b-d*(1-t):a+d*t;
+}
+function ltgRound(v,d){                  // Python round(): exact ties go to the even digit, everything else is correctly rounded
+  if(v==null||isNaN(v))return null;
+  const f=Math.pow(10,d), j=v*Math.pow(2,d+1);
+  if(Number.isInteger(j)&&j%2!==0){const t=v*f,fl=Math.floor(t);return (fl%2===0?fl:fl+1)/f;}
+  return Number(v.toFixed(d));
+}
+// Same maths as the server's _ltg_aggregate: group total = sum of the displayed (rounded) step means.
+function ltgAggregate(p,sel){
+  const labels=p.labels, rows=p.rows.filter(r=>sel.has(r[0])), n=rows.length;
+  if(!n)return{supported:true,cohort_cases:0,buckets:[],total_days:0,avg_case_days:0,wait_starts_at:p.wait_starts_at};
+  const idx={}; labels.forEach((l,i)=>{idx[l]=i;});
+  const buckets=[]; let totalAll=0, avgMilli=0;
+  p.defs.forEach(def=>{
+    const steps=[]; let bt=0;
+    def.labels.forEach(lab=>{
+      const k=idx[lab]; if(k===undefined)return;
+      const vals=[]; let sumMilli=0, presMilli=0;
+      rows.forEach(r=>{ const m=Math.round(r[1][k]*1000); sumMilli+=m; if((r[2]>>k)&1){vals.push(r[1][k]);presMilli+=m;} });
+      if(!vals.length)return;
+      vals.sort((a,b)=>a-b);
+      avgMilli+=sumMilli;
+      const meanR=ltgRound(presMilli/(1000*vals.length),1); bt+=meanR;
+      steps.push({step:lab,mean:meanR,median:ltgRound(ltgQuantile(vals,0.5),1),p90:ltgRound(ltgQuantile(vals,0.9),1),
+        cases:vals.length,pct_cases:ltgRound(100*vals.length/n,0),per_case:ltgRound(sumMilli/(1000*n),2)});
+    });
+    if(steps.length){buckets.push({key:def.key,name:def.name,color:def.color,total:ltgRound(bt,1),steps});totalAll+=bt;}
+  });
+  return{supported:true,cohort_cases:n,total_days:ltgRound(totalAll,1),avg_case_days:ltgRound(avgMilli/(1000*n),1),wait_starts_at:p.wait_starts_at,buckets};
+}
 function rptLtShowGrouped(on){
   const flat=document.getElementById('rptLtChart')?.closest('.rpt-chart-wrap-tall');
   const gw=document.getElementById('rptLtGroupedWrap');
-  const cap=document.getElementById('rptLtCaption');
-  const sb=document.getElementById('rcs_btn_rptLtChart');
-  const panel=document.getElementById('rcs_panel_rptLtChart');
+  const cap=document.getElementById('rptLtCaption'), info=document.getElementById('rptLtInfo');
+  const sb=document.getElementById('rcs_btn_rptLtChart'), panel=document.getElementById('rcs_panel_rptLtChart');
+  const dd=document.getElementById('ltgDd');
   if(flat)flat.style.display=on?'none':'';
-  if(gw)gw.style.display=on?'block':'none';
+  if(gw)gw.style.display=on?'flex':'none';
   if(cap)cap.style.display=on?'none':'';
+  if(info)info.style.display=on?'none':'';
   if(sb)sb.style.display=on?'none':'';
+  if(dd)dd.style.display=on?'':'none';
   if(panel&&on)panel.classList.remove('open','show');
+  if(!on)document.getElementById('ltgDdPanel')?.classList.remove('open');
 }
-function renderRptLtGrouped(g){
+function rptLtGroupedInit(p){
+  ltgPayload=p;
+  const n=(p.case_types||[]).length;
+  ltgSel=new Set(Array.from({length:n},(_,i)=>i));     // default: every case type from the main filter bar ticked
+  ltgBuildDd();
+  ltgRefresh();
+}
+function ltgCounts(){ const c=new Array((ltgPayload.case_types||[]).length).fill(0); (ltgPayload.rows||[]).forEach(r=>{c[r[0]]++;}); return c; }
+function ltgEsc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function ltgBuildDd(){
+  const list=document.getElementById('ltgDdList'); if(!list||!ltgPayload)return;
+  const counts=ltgCounts();
+  list.innerHTML=ltgPayload.case_types.map((nm,i)=>`<label class="ltg-dd-row" data-name="${ltgEsc(nm.toLowerCase())}"><input type="checkbox" ${ltgSel.has(i)?'checked':''} onchange="ltgToggleType(${i},this.checked)"/><span class="nm">${ltgEsc(nm)}</span><span class="cnt">(${counts[i]})</span></label>`).join('');
+  ltgSyncDd();
+}
+function ltgSyncDd(){
+  const n=ltgPayload.case_types.length, k=ltgSel.size;
+  const txt=document.getElementById('ltgDdTxt'); if(txt)txt.textContent=`${k} of ${n} selected`;
+  const cnt=document.getElementById('ltgDdCnt'); if(cnt)cnt.textContent=`${k} selected`;
+  document.querySelectorAll('#ltgDdList input[type=checkbox]').forEach((cb,i)=>{cb.checked=ltgSel.has(i);cb.disabled=(k===1&&ltgSel.has(i));});   // at least one stays ticked
+}
+function ltgToggleDd(e){ if(e)e.stopPropagation(); document.getElementById('ltgDdPanel')?.classList.toggle('open'); }
+function ltgDdFilter(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#ltgDdList .ltg-dd-row').forEach(r=>{r.style.display=r.dataset.name.includes(q)?'':'none';}); }
+function ltgToggleType(i,checked){
+  if(checked)ltgSel.add(i); else if(ltgSel.size>1)ltgSel.delete(i);
+  ltgSyncDd(); ltgRefresh();
+}
+function ltgSelectAll(){ ltgPayload.case_types.forEach((_,i)=>ltgSel.add(i)); ltgSyncDd(); ltgRefresh(); }
+function ltgRefresh(){
+  if(!ltgPayload)return;
+  const agg=ltgAggregate(ltgPayload,ltgSel);
+  const names=ltgPayload.case_types.filter((_,i)=>ltgSel.has(i));
+  renderRptLtGrouped(agg,{caseTypes:names,totalTypes:ltgPayload.case_types.length});
+}
+document.addEventListener('click',e=>{const dd=document.getElementById('ltgDd');if(dd&&!dd.contains(e.target))document.getElementById('ltgDdPanel')?.classList.remove('open');});
+
+// ══════════════════════════════════════════════════════════════
+//  SURGICAL PLAN USER filter (final plan reviewer). Options come from /analytics/psp-users and refresh every
+//  time the dropdown is opened (and before a report is generated while reviewers are selected), so they always
+//  reflect the current date range / product / case types. Sorted by cases completed; India = reviewers in the
+//  Accounts-sheet teams, 'USA / not listed' = everyone else.
+// ══════════════════════════════════════════════════════════════
+let rptPspData=null, rptPspKey='';
+function rptPspOptionsQS(){
+  const p=new URLSearchParams(buildRptQS());
+  ['psp_user','granularity','step','step_user'].forEach(k=>p.delete(k));
+  return p.toString();
+}
+async function loadRptPspUsers(force){
+  const list=document.getElementById('list-rptPspUser'); if(!list)return;
+  const key=rptPspOptionsQS();
+  if(!force&&rptPspData&&key===rptPspKey){renderRptPspList();return;}
+  list.innerHTML='<div style="padding:10px;color:var(--text-4);font-size:11px">Loading reviewers...</div>';
+  try{
+    const res=await fetch(`${API}/analytics/psp-users?${key}`);
+    const data=res.ok?await res.json():null;
+    if(!data||!data.users)throw new Error('bad response');
+    rptPspData=data; rptPspKey=key;
+    // drop selected reviewers that are not in the current selection any more
+    const present=new Set(data.users.map(u=>u.name.toLowerCase()));
+    const kept=SEL.rptPspUser.filter(n=>present.has(n.toLowerCase()));
+    if(kept.length!==SEL.rptPspUser.length){SEL.rptPspUser=kept;updateLabel('rptPspUser');updateCount('rptPspUser');updateClearBtn('rptPspUser');}
+    renderRptPspList();
+  }catch(e){list.innerHTML='<div style="padding:10px;color:var(--text-4);font-size:11px">Error loading reviewers</div>';}
+}
+function rptPspOpen(){
+  toggleDD('rptPspUser');
+  if(document.getElementById('dd-rptPspUser')?.classList.contains('open'))loadRptPspUsers(false);
+}
+function rptPspEsc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function renderRptPspList(){
+  const list=document.getElementById('list-rptPspUser'), quick=document.getElementById('pspQuick'); const d=rptPspData;
+  if(!list||!d)return;
+  const sel=new Set(SEL.rptPspUser.map(n=>n.toLowerCase()));
+  list.innerHTML=d.users.length?d.users.map(u=>`<label class="ms-item" id="item-rptPspUser-${safeId(u.name)}"><input type="checkbox" value="${rptPspEsc(u.name)}" ${sel.has(u.name.toLowerCase())?'checked':''} onchange="onCheck('rptPspUser',this.value,this.checked)"/><span class="psp-nm">${rptPspEsc(u.name)}</span>${d.teams_available?`<span class="psp-team">${u.team?rptPspEsc(u.team):'USA / not listed'}</span>`:''}<span class="psp-cnt">${u.cases}</span></label>`).join(''):'<div style="padding:10px;color:var(--text-4);font-size:11px">No surgical plan reviewers in this selection</div>';
+  if(quick){
+    if(d.teams_available&&d.users.length){
+      quick.style.display='';
+      quick.innerHTML='Quick select: '
+        +`<button onclick="rptPspQuick('india')">India (all teams) · ${d.india_reviewers}</button>`
+        +d.teams.map(t=>`<button onclick="rptPspQuick('team','${rptPspEsc(t.team).replace(/'/g,'&#39;')}')">${rptPspEsc(t.team)} · ${t.reviewers}</button>`).join('')
+        +`<button class="us" onclick="rptPspQuick('us')">USA / not listed · ${d.other_reviewers}</button>`;
+    }else quick.style.display='none';
+  }
+  updateCount('rptPspUser');
+}
+function rptPspQuick(kind,team){
+  const d=rptPspData; if(!d)return;
+  const names=d.users.filter(u=>kind==='india'?!!u.team:kind==='team'?u.team===team:!u.team).map(u=>u.name);
+  const same=names.length===SEL.rptPspUser.length&&names.every(n=>SEL.rptPspUser.includes(n));
+  SEL.rptPspUser=same?[]:names;                      // clicking the same chip again clears it
+  updateLabel('rptPspUser');updateCount('rptPspUser');updateClearBtn('rptPspUser');
+  renderRptPspList();
+}
+function rptPspUpdateNotice(){
+  const box=document.getElementById('rptPspNotice'), txt=document.getElementById('rptPspNoticeTxt'); if(!box)return;
+  const n=SEL.rptPspUser?.length||0;
+  box.style.display=n?'block':'none';
+  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): only cases whose surgical plan was completed by them are shown. In-progress cases with no plan reviewer yet are left out.`;
+}
+async function rptPspPrune(){ if(SEL.rptPspUser?.length)await loadRptPspUsers(true); }
+
+// ══════════════════════════════════════════════════════════════
+//  VOLUME: previous 3 months. Pulled with the report (separate queries that END where the selected range's first
+//  month / week begins, so the selected bars never change); the checkbox only redraws from rptVolRawData.
+// ══════════════════════════════════════════════════════════════
+let rptVolShowPrev=false, rptVolPriorFlags=null, rptVolPriorRange=null;
+function rptVolPriorWindows(from){
+  if(!from)return null;
+  const d=new Date(from+'T00:00:00Z'); if(isNaN(d))return null;
+  const iso=x=>x.toISOString().slice(0,10);
+  const ms=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),1));
+  const ext=new Date(Date.UTC(ms.getUTCFullYear(),ms.getUTCMonth()-3,1));
+  const toM=new Date(ms.getTime()-86400000);                         // day before the selected start month
+  const ws=new Date(d.getTime()-d.getUTCDay()*86400000);             // week (Sunday) containing the selected start
+  const toW=new Date(ws.getTime()-86400000);
+  return{from:iso(ext),toMonthly:iso(toM),toWeekly:iso(toW)};
+}
+// merge a prior-range result into the selected-range result; periods only in the prior result are flagged as prior
+function rptVolMerge(prior,sel){
+  const out={periods:[...sel.periods],totals:[...sel.totals],types:sel.types.map(t=>({name:t.name,data:[...t.data]})),prior:new Set()};
+  if(!prior||!prior.periods||!prior.periods.length)return out;
+  const have=new Set(sel.periods), addP=prior.periods.filter(x=>!have.has(x));
+  if(!addP.length)return out;
+  const pidx=Object.fromEntries(prior.periods.map((x,i)=>[x,i])), sidx=Object.fromEntries(sel.periods.map((x,i)=>[x,i]));
+  const periods=[...addP,...sel.periods].sort();
+  const names=[...new Set([...sel.types.map(t=>t.name),...prior.types.map(t=>t.name)])];
+  const pick=(src,name,i)=>{const t=src.types.find(x=>x.name===name);return t?(t.data[i]||0):0;};
+  return{
+    periods,
+    totals:periods.map(x=>x in sidx?sel.totals[sidx[x]]:prior.totals[pidx[x]]),
+    types:names.map(nm=>({name:nm,data:periods.map(x=>x in sidx?pick(sel,nm,sidx[x]):pick(prior,nm,pidx[x]))})),
+    prior:new Set(addP)
+  };
+}
+function setRptVolPrev(checked){
+  rptVolShowPrev=!!checked;
+  if(!rptVolRawData)return;
+  renderRptVolChart(rptVolRawData);
+  if(rptForecastData?.by_month&&rptVolInst)addForecastToChart(rptVolInst,rptVolInst.data.labels,rptForecastData.by_month,rptVolGranularity,'#E05A4E');
+}
+// shaded band behind the previous-3-months bars
+const rptVolPriorBand={
+  id:'rptVolPriorBand',
+  beforeDatasetsDraw(chart){
+    const fl=rptVolPriorFlags; if(!fl||chart!==rptVolInst||!fl.some(Boolean))return;
+    const {ctx,chartArea:a,scales:{x}}=chart, n=fl.length;
+    const step=n>1?(x.getPixelForValue(1)-x.getPixelForValue(0)):a.width;
+    const first=fl.indexOf(true), last=fl.lastIndexOf(true);
+    const x0=x.getPixelForValue(first)-step/2, x1=x.getPixelForValue(last)+step/2;
+    ctx.save(); ctx.fillStyle='rgba(148,163,184,0.14)'; ctx.fillRect(x0,a.top,x1-x0,a.bottom-a.top);
+    ctx.fillStyle='#64748b'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('PREVIOUS 3 MONTHS',(x0+x1)/2,a.top+10); ctx.restore();
+  }
+};
+Chart.register(rptVolPriorBand);
+
+// ══════════════════════════════════════════════════════════════
+//  VOLUME: thin bars inside each bar = the selected case types
+// ══════════════════════════════════════════════════════════════
+const RPT_TYPE_PALETTE=['#6AA89A','#7E96C0','#B3A5C9','#C9B88F','#9DB8A0','#8FA5B8','#C4A7A0','#A9B4C2'];
+let rptVolNest=null;
+function rptVolTypeName(n){return (n===''||n==null||n==='None'||n==='nan')?'(no case type)':n;}
+function rptVolBuildTypes(v){
+  const tot={};
+  [v.subD,v.comD].forEach(src=>(src?.types||[]).forEach(t=>{tot[t.name]=(tot[t.name]||0)+t.data.reduce((a,b)=>a+b,0);}));
+  return Object.keys(tot).sort((a,b)=>tot[b]-tot[a]).map((name,i)=>({name,label:rptVolTypeName(name),color:RPT_TYPE_PALETTE[i%RPT_TYPE_PALETTE.length]}));
+}
+function rptVolSeriesFor(src,labels,types,total,priorSet){
+  const idx={}; (src?.periods||[]).forEach((p,i)=>{idx[p]=i;});
+  return types.map(t=>{
+    const ds=(src?.types||[]).find(x=>x.name===t.name);
+    return labels.map(l=>{
+      if(!ds)return 0;
+      if(total){const wantPrior=(l==='Previous 3 months');let sum=0;(src.periods||[]).forEach((p,i)=>{if((priorSet&&priorSet.has(p))===wantPrior)sum+=ds.data[i]||0;});return sum;}
+      const i=idx[l]; return i===undefined?0:ds.data[i];
+    });
+  });
+}
+function rptVolMakeNest(raw,labels,gran,s,total,prior){
+  const types=raw.types||[];
+  if(types.length<2){rptVolNest=null;return null;}
+  const subSrc=gran==='weekly'?raw.submissionWeekly:raw.submission, comSrc=gran==='weekly'?raw.completionWeekly:raw.completion;
+  const pSet=gran==='weekly'?(raw.priorW||new Set()):(raw.priorM||new Set());
+  rptVolNest={types,series:[rptVolSeriesFor(subSrc,labels,types,total,pSet),rptVolSeriesFor(comSrc,labels,types,total,pSet)],
+    labels,mode:total?'total':gran,showNums:s.showLabels,fs:Math.max(8,(s.dlSize||10)-1),hits:[],mouse:null,prior:prior||[]};
+  return rptVolNest;
+}
+function rptVolHitAt(x,y){ const n=rptVolNest; if(!n||x==null)return null; return n.hits.find(h=>x>=h.x0&&x<=h.x1&&y>=h.yTop&&y<=h.base)||null; }
+function rptVolWrapClick(orig){
+  return (evt,els,chart)=>{
+    const h=rptVolHitAt(evt?.x,evt?.y);
+    if(h){ fetchRptVolCases(h.mode==='total'?(h.period==='Previous 3 months'?'prev3':'total'):h.period,h.di,h.mode,h.type.name); return; }
+    if(orig)orig(evt,els,chart);
+  };
+}
+function rptVolNestOptions(opts){
+  if(!rptVolNest)return opts;
+  opts.onHover=(evt,els,chart)=>{ if(rptVolNest){rptVolNest.mouse={x:evt.x,y:evt.y};} chart.canvas.style.cursor=(els&&els.length)?'pointer':'default'; };
+  opts.plugins.tooltip.callbacks={
+    title:items=>items.length?items[0].label:'',
+    label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y}`,
+    afterBody:items=>{
+      if(!items.length||!rptVolNest)return [];
+      const it=items[0], di=it.datasetIndex, i=it.dataIndex, m=rptVolNest.mouse;
+      const hit=m?rptVolHitAt(m.x,m.y):null;
+      if(hit&&hit.di===di&&hit.i===i)return [`${hit.type.label}: ${hit.v}`];
+      return rptVolNest.types.map((t,k)=>`${t.label}: ${(rptVolNest.series[di][k]||[])[i]||0}`);
+    }
+  };
+  return opts;
+}
+// draws the thin bars over each main bar: they span the bar's full width, heights are each case type's own volume
+const rptVolNestPlugin={
+  id:'rptVolNest',
+  afterDatasetsDraw(chart){
+    const n=rptVolNest; if(!n||chart!==rptVolInst)return;
+    const {ctx,scales:{y}}=chart; const base=y.getPixelForValue(0); n.hits=[];
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di); if(meta.hidden)return;
+      meta.data.forEach((bar,i)=>{
+        if(!(ds.data[i]>0))return;
+        const w=bar.width, left=bar.x-w/2, cnt=n.types.length, gap=1.5, iw=(w-gap*(cnt-1))/cnt;
+        n.types.forEach((t,k)=>{
+          const v=(n.series[di][k]||[])[i]||0; if(v<=0)return;
+          const yTop=y.getPixelForValue(v), x0=left+k*(iw+gap);
+          ctx.save(); ctx.globalAlpha=(n.prior&&n.prior[i])?0.55:1; ctx.fillStyle=t.color; ctx.fillRect(x0,yTop,iw,base-yTop);
+          if(n.showNums&&iw>=15&&(base-yTop)>=14){ctx.fillStyle=di===0?'#1f2933':'#ffffff';ctx.font='bold '+n.fs+'px sans-serif';ctx.textAlign='center';ctx.fillText(v,x0+iw/2,yTop-3);}
+          ctx.restore();
+          n.hits.push({x0,x1:x0+iw,yTop,base,di,i,type:t,v,period:n.labels[i],mode:n.mode});
+        });
+      });
+    });
+  }
+};
+Chart.register(rptVolNestPlugin);
+function rptVolRenderLegend(){
+  const el=document.getElementById('rptVolTypeLegend'); if(!el)return;
+  if(rptVolNest){el.style.display='flex';el.innerHTML='<b>Case types:</b> '+rptVolNest.types.map(t=>`<span><i style="background:${t.color}"></i>${rptPspEsc(t.label)}</span>`).join('');}
+  else{el.style.display='none';el.innerHTML='';}
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ON-TIME DELIVERY: definition text + trend (selected period and the 3 months before it)
+// ══════════════════════════════════════════════════════════════
+let rptOtdTrendInst=null;
+const OTD_LEGACY_TEXT='Legacy definition: on time = digital LT ≤ 14 days, or implicit PSP cases (no real PSP reviewer accept — assumed on time). Digital LT = PSP reviewer accept − scan upload − surgeon wait − on-hold days. Click a segment to view those cases.';
+function renderRptOtdDefinition(d){
+  const el=document.getElementById('rptOtdDefText'); if(!el)return;
+  el.textContent=d.definition==='new'
+    ?`${d.definition_text} On time = ${d.target_days} days or less. Cases count in the month their last digital production step finished. Click a segment to view those cases.`
+    :OTD_LEGACY_TEXT;
+}
+function renderRptOtdTrend(d){
+  if(rptOtdTrendInst){try{rptOtdTrendInst.destroy();}catch(e){} rptOtdTrendInst=null;}
+  const canvas=document.getElementById('rptOtdTrendChart'); if(!canvas||!d?.points)return;
+  const pts=d.points, labels=pts.map(p=>p.label), vals=pts.map(p=>p.pct);
+  const dark='#005F72', light='#33A5BF';
+  const hdr=document.getElementById('rptOtdTrendHdr');
+  if(hdr)hdr.textContent=`Trend — selected period and the ${d.granularity==='weekly'?'13 weeks':'3 months'} before it`;
+  const note=document.getElementById('rptOtdTrendNote');
+  if(note)note.textContent=d.definition==='new'?'On-time % per '+(d.granularity==='weekly'?'week':'month')+' (n = cases that period). Same definition as the donut above.':'On-time % per '+(d.granularity==='weekly'?'week':'month')+' using the legacy formula (n = cases that period).';
+  const band={id:'otdBand',beforeDatasetsDraw(chart){
+    const {ctx,chartArea:a,scales:{x}}=chart; const step=pts.length>1?(x.getPixelForValue(1)-x.getPixelForValue(0)):a.width;
+    ctx.save(); ctx.fillStyle='rgba(0,142,170,0.10)';
+    pts.forEach((p,i)=>{if(p.selected){const cx=x.getPixelForValue(i);ctx.fillRect(cx-step/2,a.top,step,a.bottom-a.top);}});
+    ctx.restore();}};
+  rptOtdTrendInst=new Chart(canvas.getContext('2d'),{
+    type:'line',
+    data:{labels,datasets:[{data:vals,borderColor:light,backgroundColor:light,borderWidth:2.5,tension:0.2,spanGaps:true,
+      pointRadius:pts.map(p=>p.selected?6:4),pointBackgroundColor:pts.map(p=>p.selected?dark:light),pointBorderColor:'#fff',pointBorderWidth:1.5}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18,right:10}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>{const p=pts[ctx.dataIndex];return p.total?`${p.pct}% on time (${p.on_time} of ${p.total} cases)`:'No cases';}}},
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]!=null,anchor:'end',align:'top',offset:4,color:'#1f2933',font:{size:11,weight:'700'},formatter:v=>v==null?'':v+'%'}},
+      scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'#e5e7eb'}},
+        x:{ticks:{font:{size:10},callback:function(v,i){return [labels[i],'n='+pts[i].total];}},grid:{display:false}}}},
+    plugins:[band]});
+}
+
+// ── Copy a whole card (used by the combined On-Time Delivery card: donut + trend) ──
+async function copyRptCardEl(btn,label,cardId){
+  const card=document.getElementById(cardId);
+  if(!card||typeof html2canvas!=='function'){toast('Copy not available','err');return;}
+  const hidden=[]; card.querySelectorAll('.copy-btn,.chart-settings-btn,.rcs-panel').forEach(el=>{hidden.push([el,el.style.visibility]);el.style.visibility='hidden';});
+  try{
+    const cv=await html2canvas(card,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true});
+    cv.toBlob(blob=>{
+      if(!blob){toast('Chart not ready','err');return;}
+      try{navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>_flashCopyBtn(btn)).catch(()=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${label.replace(/\s+/g,'_')}.png`;a.click();});}
+      catch(err){const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download=`${label.replace(/\s+/g,'_')}.png`;a.click();_flashCopyBtn(btn);}
+    },'image/png');
+  }finally{hidden.forEach(([el,v])=>el.style.visibility=v);}
+}
+
+
+// ── Lead Time GROUPED renderer (plain HTML/CSS bars; html2canvas captures it for the PDF) ──
+function renderRptLtGrouped(g,opts){
+  opts=opts||{};
   const wrap=document.getElementById('rptLtGroupedWrap'); if(!wrap)return;
   const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const f1=v=>(v==null||isNaN(v))?'–':(Math.round(v*10)/10).toFixed(1);
@@ -4503,6 +4910,7 @@ function renderRptLtGrouped(g){
   const axisMax=Math.max(tick,Math.ceil(base/tick)*tick);
   const ticks=[]; for(let t=0;t<=axisMax;t+=tick)ticks.push(t);
   let h='';
+  if(opts.caseTypes&&opts.caseTypes.length){const names=(opts.caseTypes.length===opts.totalTypes&&opts.totalTypes>3)?`All case types (${opts.totalTypes})`:opts.caseTypes.join('; ');h+=`<div class="ltg-ctypes"><b>Case types:</b> ${esc(names)}</div>`;}
   h+=`<div class="ltg-total">${n} cases completed through Peer Review · sum of step averages ${f1(g.total_days)} days</div>`;
   h+=`<div class="ltg-sub">The average case takes ${f1(g.avg_case_days)} days from creation to its last step. Waiting on design call, scan exception and on hold apply to only some cases, so the sum of step averages is larger.</div>`;
   h+='<div class="ltg-legend">'+buckets.map(b=>`<span><i style="background:${b.color}"></i>${esc(b.name)} · <b>${f1(b.total)}d</b></span>`).join('')+'</div>';
@@ -4536,7 +4944,7 @@ function renderRptLtGrouped(g){
 async function copyRptGrouped(btn,label){
   const gw=document.getElementById('rptLtGroupedWrap'); const card=gw?.closest('.rpt-chart-card');
   if(!card||typeof html2canvas!=='function'){toast('Copy not available','err');return;}
-  const hidden=[]; card.querySelectorAll('.copy-btn,.chart-settings-btn').forEach(el=>{hidden.push([el,el.style.visibility]);el.style.visibility='hidden';});
+  const hidden=[]; card.querySelectorAll('.copy-btn,.chart-settings-btn,.ltg-dd').forEach(el=>{hidden.push([el,el.style.visibility]);el.style.visibility='hidden';});
   try{
     const cv=await html2canvas(card,{scale:2,backgroundColor:'#ffffff',logging:false,useCORS:true});
     cv.toBlob(blob=>{
@@ -4636,10 +5044,7 @@ function setRptVolGran(gran, btn){
     renderRptVolChart(rptVolRawData);
     // Re-apply forecast on the new chart
     if(rptForecastData?.by_month && rptVolInst){
-      const labels = gran==='weekly' ? rptVolRawData.completionWeekly.periods
-                   : gran==='monthly' ? rptVolRawData.completion.periods
-                   : ['Selected Period'];
-      addForecastToChart(rptVolInst, labels, rptForecastData.by_month, gran, '#E05A4E');
+      addForecastToChart(rptVolInst, rptVolInst.data.labels, rptForecastData.by_month, gran, '#E05A4E');
     }
   }
 }
@@ -4652,7 +5057,7 @@ function rptVolDrillUp(){
   if(rptVolRawData){
     renderRptVolChart(rptVolRawData);
     if(rptForecastData?.by_month && rptVolInst){
-      addForecastToChart(rptVolInst, rptVolRawData.submission.periods, rptForecastData.by_month, 'monthly', '#E05A4E');
+      addForecastToChart(rptVolInst, rptVolInst.data.labels, rptForecastData.by_month, 'monthly', '#E05A4E');
     }
   }
 }
@@ -4684,25 +5089,34 @@ function renderRptVolChart(raw){
 
   // ── Total mode: same grouped config as weekly/monthly, just one label ──
   if(rptVolGranularity==='total'){
-    const subTotal=(subSrc.totals||[]).reduce((a,b)=>a+b,0);
-    const comTotal=(comSrc.totals||[]).reduce((a,b)=>a+b,0);
+    const pM=raw.priorM||new Set();
+    const sumBy=(src,wantPrior)=>(src.periods||[]).reduce((acc,p,i)=>acc+((pM.has(p)===wantPrior)?(src.totals[i]||0):0),0);
+    const withPrev=rptVolShowPrev&&pM.size>0;
+    const tLabels=withPrev?['Previous 3 months','Selected period']:['Selected Period'];
+    const subTot=withPrev?[sumBy(subSrc,true),sumBy(subSrc,false)]:[sumBy(subSrc,false)];
+    const comTot=withPrev?[sumBy(comSrc,true),sumBy(comSrc,false)]:[sumBy(comSrc,false)];
+    const tPrior=withPrev?[true,false]:[false];
+    rptVolPriorFlags=withPrev?tPrior:null;
     const onClickTotal=(evt,els)=>{
       if(!els.length)return;
-      fetchRptVolCases('total', els[0].datasetIndex, 'total');
+      fetchRptVolCases(tLabels[els[0].index]==='Previous 3 months'?'prev3':'total', els[0].datasetIndex, 'total');
     };
+    rptVolMakeNest(raw,tLabels,rptVolGranularity,s,true,tPrior);
     rptVolInst=new Chart(canvas.getContext('2d'),{
       type:'bar',
-      data:{labels:['Selected Period'],datasets:[
-        {label:'Submitted (Scan Upload)',data:[subTotal],backgroundColor:s.color+'cc',borderColor:s.color,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75},
-        {label:'Completed (PSP Review)',data:[comTotal],backgroundColor:s.color2+'cc',borderColor:s.color2,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75}
+      data:{labels:tLabels,datasets:[
+        {label:'Submitted (Scan Upload)',data:subTot,backgroundColor:c=>s.color+(tPrior[c.dataIndex]?(rptVolNest?'28':'55'):(rptVolNest?'55':'cc')),borderColor:s.color,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75},
+        {label:'Completed (PSP Review)',data:comTot,backgroundColor:c=>s.color2+(tPrior[c.dataIndex]?'66':'cc'),borderColor:s.color2,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75}
       ]},
-      options:{...rptVolOptions(s,true),onClick:onClickTotal}
+      options:rptVolNestOptions({...rptVolOptions(s,true),onClick:rptVolWrapClick(onClickTotal)})
     });
+    rptVolRenderLegend();
     return;
   }
 
   // ── Align periods for weekly/monthly ──
-  let labels, subData, comData;
+  let labels, subData, comData, prior=[];
+  const priorSet=rptVolGranularity==='weekly'?(raw.priorW||new Set()):(raw.priorM||new Set());
   if(rptVolGranularity==='weekly' && rptVolDrillMonth){
     // Drill: filter weekly data to the selected month
     const filterWeeks=(periods,vals)=>{
@@ -4716,8 +5130,12 @@ function renderRptVolChart(raw){
     const allPeriods=Array.from(new Set([...subPeriods,...comPeriods])).sort();
     const subMap=Object.fromEntries(subPeriods.map((p,i)=>[p,subVals[i]]));
     const comMap=Object.fromEntries(comPeriods.map((p,i)=>[p,comVals[i]]));
-    labels=allPeriods; subData=allPeriods.map(p=>subMap[p]||0); comData=allPeriods.map(p=>comMap[p]||0);
+    const shown=rptVolShowPrev?allPeriods:allPeriods.filter(p=>!priorSet.has(p));      // previous months only when ticked
+    labels=shown; subData=shown.map(p=>subMap[p]||0); comData=shown.map(p=>comMap[p]||0);
+    prior=shown.map(p=>priorSet.has(p));
   }
+  if(prior.length!==labels.length)prior=labels.map(()=>false);
+  rptVolPriorFlags=prior.some(Boolean)?prior:null;
 
   // Click handling:
   //   - Monthly mode: click drills into weekly view (existing behaviour)
@@ -4731,15 +5149,17 @@ function renderRptVolChart(raw){
     fetchRptVolCases(period, datasetIdx, rptVolGranularity);
   };
 
-  // Adjacent grouped bars
+  // Adjacent grouped bars (+ thin per-case-type bars drawn inside each bar by rptVolNestPlugin)
+  rptVolMakeNest(raw,labels,rptVolGranularity,s,false,prior);
   rptVolInst=new Chart(canvas.getContext('2d'),{
     type:'bar',
     data:{labels,datasets:[
-      {label:'Submitted (Scan Upload)',data:subData,backgroundColor:s.color+'cc',borderColor:s.color,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75},
-      {label:'Completed (PSP Review)',data:comData,backgroundColor:s.color2+'cc',borderColor:s.color2,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75}
+      {label:'Submitted (Scan Upload)',data:subData,backgroundColor:c=>s.color+(prior[c.dataIndex]?(rptVolNest?'28':'55'):(rptVolNest?'55':'cc')),borderColor:s.color,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75},
+      {label:'Completed (PSP Review)',data:comData,backgroundColor:c=>s.color2+(prior[c.dataIndex]?'66':'cc'),borderColor:s.color2,borderWidth:1,borderRadius:2,barPercentage:1.0,categoryPercentage:0.75}
     ]},
-    options:{...rptVolOptions(s,true), onClick}
+    options:rptVolNestOptions({...rptVolOptions(s,true), onClick:rptVolWrapClick(onClick)})
   });
+  rptVolRenderLegend();
 }
 
 function rptVolOptions(s,showTip){
@@ -4883,6 +5303,7 @@ function renderRptOtdChart(otdData){
   document.getElementById('rptOtdYes').textContent=on_time;
   document.getElementById('rptOtdNo').textContent=delayed;
   document.getElementById('rptOtdTarget').textContent=`Target: Digital LT ≤ ${target_days} days`;
+  renderRptOtdDefinition(otdData);
   const labels=['On Time','Delayed']; const vals=[on_time,delayed];
   if(no_data>0){labels.push('No Data');vals.push(no_data);}
   const bgColors=[s.color+'cc',s.color2+'cc','#9ca3af99'];
@@ -4972,6 +5393,7 @@ async function generateReport(){
   const activeToggle=document.getElementById(gran==='weekly'?'rptVolWeeklyBtn':'rptVolMonthlyBtn');
   if(activeToggle)activeToggle.classList.add('active');
 
+  await rptPspPrune();            // drop reviewers that no longer match the current filters before building the report
   const qs=buildRptQS();
   const productLabel=SEL.rptProductName.length?(SEL.rptProductName.length===1?SEL.rptProductName[0]:SEL.rptProductName.length+' products'):(SEL.rptProductGroup.length?SEL.rptProductGroup.join(', '):'All Products');
   const from=document.getElementById('rptDateFrom').value||rptDateFrom;
@@ -4979,7 +5401,7 @@ async function generateReport(){
   const dateLabel=rptIsAllTime?'All Time':(from&&to?`${from} → ${to}`:from||to||'All Time');
 
   document.getElementById('rptBannerTitle').textContent='Digital Production Metrics — '+productLabel;
-  document.getElementById('rptBannerSub').textContent=gran.charAt(0).toUpperCase()+gran.slice(1)+' view · '+dateLabel;
+  document.getElementById('rptBannerSub').textContent=gran.charAt(0).toUpperCase()+gran.slice(1)+' view · '+dateLabel+(SEL.rptPspUser?.length?` · Surgical plan users: ${SEL.rptPspUser.length} selected`:'');
   document.getElementById('rptBannerMeta').textContent='Generated '+new Date().toLocaleString();
 
   // Progress helpers
@@ -5024,21 +5446,31 @@ async function generateReport(){
 
     // ── Fire selected chart fetches ──
     const chartFetches=[];
+    const _pw=rptIsAllTime?null:rptVolPriorWindows(from);
+    rptVolPriorRange=_pw?{from:_pw.from,to:_pw.toMonthly}:null;
+    const _volChk=document.getElementById('rptVolPrevChk'), _volWrap=document.getElementById('rptVolPrevWrap');
+    if(_volChk){_volChk.disabled=!_pw;} if(_volWrap){_volWrap.classList.toggle('disabled',!_pw);_volWrap.title=_pw?'Also shows the 3 months before the selected period':'Not available for All Time';}
+    rptVolShowPrev=!!(_pw&&_volChk&&_volChk.checked);
+    const _pf=(g,sub,to)=>_pw?fetch(`${API}/analytics/trends?${buildRptQS({granularity:g,metric:'volume',breakdown_by:'case_type',date_from:_pw.from,date_to:to,...(sub?{date_field:'first_scan_upload_date'}:{})})}`).catch(()=>null):Promise.resolve(null);
     if(_selVol) chartFetches.push(Promise.all([
-      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'monthly',metric:'volume',date_field:'first_scan_upload_date'})}`).catch(()=>null),
-      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'monthly',metric:'volume'})}`).catch(()=>null),
-      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'weekly',metric:'volume',date_field:'first_scan_upload_date'})}`).catch(()=>null),
-      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'weekly',metric:'volume'})}`).catch(()=>null),
-    ]).then(async([r1,r2,r3,r4])=>{
+      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'monthly',metric:'volume',date_field:'first_scan_upload_date',breakdown_by:'case_type'})}`).catch(()=>null),
+      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'monthly',metric:'volume',breakdown_by:'case_type'})}`).catch(()=>null),
+      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'weekly',metric:'volume',date_field:'first_scan_upload_date',breakdown_by:'case_type'})}`).catch(()=>null),
+      fetch(`${API}/analytics/trends?${buildRptQS({granularity:'weekly',metric:'volume',breakdown_by:'case_type'})}`).catch(()=>null),
+      _pf('monthly',true,_pw?_pw.toMonthly:''),_pf('monthly',false,_pw?_pw.toMonthly:''),_pf('weekly',true,_pw?_pw.toWeekly:''),_pf('weekly',false,_pw?_pw.toWeekly:''),
+    ]).then(async([r1,r2,r3,r4,q1,q2,q3,q4])=>{
       tick('Volume loaded');
-      const agg=d=>{if(!d?.periods)return{periods:[],totals:[]};return{periods:d.periods,totals:d.periods.map((_,pi)=>d.datasets.reduce((s,ds)=>s+(parseFloat(ds.data[pi])||0),0))};};
-      return{type:'vol',subD:r1?.ok?agg(await r1.json()):{periods:[],totals:[]},comD:r2?.ok?agg(await r2.json()):{periods:[],totals:[]},subDW:r3?.ok?agg(await r3.json()):{periods:[],totals:[]},comDW:r4?.ok?agg(await r4.json()):{periods:[],totals:[]}};
+      const agg=d=>{if(!d?.periods)return{periods:[],totals:[],types:[]};return{periods:d.periods,totals:d.periods.map((_,pi)=>d.datasets.reduce((s,ds)=>s+(parseFloat(ds.data[pi])||0),0)),types:d.datasets.map(ds=>({name:ds.full_label||ds.label,data:ds.data.map(x=>parseFloat(x)||0)}))};};
+      const J=async r=>r?.ok?agg(await r.json()):{periods:[],totals:[],types:[]};
+      const[sD,cD,sDW,cDW,pS,pC,pSW,pCW]=await Promise.all([J(r1),J(r2),J(r3),J(r4),J(q1),J(q2),J(q3),J(q4)]);
+      return{type:'vol',subD:rptVolMerge(pS,sD),comD:rptVolMerge(pC,cD),subDW:rptVolMerge(pSW,sDW),comDW:rptVolMerge(pCW,cDW)};
     }));
     if(_selWip) chartFetches.push(fetch(`${API}/analytics/report/wip-trend?${buildRptQS({granularity:rptWipGranularity})}`).catch(()=>null).then(async r=>{tick('WIP trend loaded');return{type:'wip',data:r?.ok?await r.json():null};}));
     if(_selProc) chartFetches.push(fetch(`${API}/analytics/report/process-counts?${qs}`).catch(()=>null).then(async r=>{tick('Process counts loaded');return{type:'proc',data:r?.ok?await r.json():null};}));
     if(_selLt) chartFetches.push(fetch(`${API}/analytics/report/lt-by-step?${qs}`).catch(()=>null).then(async r=>{tick('Lead time loaded');return{type:'lt',data:r?.ok?await r.json():null};}));
     if(_selLt) chartFetches.push(fetch(`${API}/analytics/report/lt-grouped?${qs}`).catch(()=>null).then(async r=>({type:'ltg',data:r?.ok?await r.json():null})));
     if(_selFpy) chartFetches.push(fetch(`${API}/analytics/report/fpy-by-step?${qs}`).catch(()=>null).then(async r=>{tick('FPY loaded');return{type:'fpy',data:r?.ok?await r.json():null};}));
+    if(_selOtd) chartFetches.push(fetch(`${API}/analytics/report/otd-trend?${buildRptQS({granularity:gran==='weekly'?'weekly':'monthly'})}`).catch(()=>null).then(async r=>({type:'otdt',data:r?.ok?await r.json():null})));
     if(_selOtd) chartFetches.push(fetch(`${API}/analytics/report/otd?${qs}`).catch(()=>null).then(async r=>{tick('OTD loaded');return{type:'otd',data:r?.ok?await r.json():null};}));
     if(_selEff) chartFetches.push(fetch(`${API}/analytics/process-efficiency?${qs}`).catch(()=>null).then(async r=>{tick('Efficiency loaded');return{type:'eff',data:r?.ok?await r.json():null};}));
     if(_selExcl) chartFetches.push(fetch(`${API}/analytics/process-efficiency/exclusions?${qs}`).catch(()=>null).then(async r=>{tick('Exclusions loaded');return{type:'excl',data:r?.ok?await r.json():null};}));
@@ -5056,11 +5488,12 @@ async function generateReport(){
     if(_selVol&&byType.vol){
       const v=byType.vol;
       rptVolRawData={submission:v.subD,completion:v.comD,submissionWeekly:v.subDW,completionWeekly:v.comDW};
+      rptVolRawData.types=rptVolBuildTypes({subD:v.subD,comD:v.comD});
+      rptVolRawData.priorM=new Set([...v.subD.prior,...v.comD.prior]); rptVolRawData.priorW=new Set([...v.subDW.prior,...v.comDW.prior]);
       rptForecastData=byType.forecast?.data||null;
       renderRptVolChart(rptVolRawData);
       if(rptForecastData?.by_month&&rptVolInst){
-        const labels=rptVolGranularity==='weekly'?v.subDW.periods:v.comD.periods;
-        addForecastToChart(rptVolInst,labels,rptForecastData.by_month,rptVolGranularity,'#E05A4E');
+        addForecastToChart(rptVolInst,rptVolInst.data.labels,rptForecastData.by_month,rptVolGranularity,'#E05A4E');
       }
     }
     if(_selWip&&byType.wip?.data){window._rptLastWip=byType.wip.data;renderRptWipChart(byType.wip.data);}
@@ -5069,11 +5502,12 @@ async function generateReport(){
     if(_selLt){
       // Shoulder only: grouped, non-overlapping breakup. Anything else (or any error) keeps the flat chart above.
       const _g=byType.ltg?.data;
-      if(_g&&_g.supported&&_g.buckets&&_g.buckets.length){try{renderRptLtGrouped(_g);rptLtShowGrouped(true);}catch(e){console.error('grouped LT failed',e);rptLtShowGrouped(false);}}
+      if(_g&&_g.supported&&_g.buckets&&_g.buckets.length){try{if(_g.rows){rptLtGroupedInit(_g);}else{renderRptLtGrouped(_g);}rptLtShowGrouped(true);}catch(e){console.error('grouped LT failed',e);rptLtShowGrouped(false);}}
       else rptLtShowGrouped(false);
     }
     if(_selFpy&&byType.fpy?.data){window._rptLastFpy=byType.fpy.data.steps;renderRptFpyChart(byType.fpy.data.steps);}
     if(_selOtd&&byType.otd?.data){window._rptLastOtd=byType.otd.data;renderRptOtdChart(byType.otd.data);}
+    if(_selOtd&&byType.otdt?.data){try{renderRptOtdTrend(byType.otdt.data);}catch(e){console.error('OTD trend failed',e);}}
     if(_selEff&&byType.eff?.data&&typeof renderRptProcEffChart==='function')renderRptProcEffChart(byType.eff.data);
     if(_selExcl&&byType.excl?.data&&typeof renderRptExclChart==='function')renderRptExclChart(byType.excl.data);
     if(_selQt&&byType.qt?.data&&typeof renderRptQtChart==='function')renderRptQtChart(byType.qt.data);
@@ -5215,12 +5649,13 @@ async function exportReportPdf(){
   const to=document.getElementById('rptDateTo')?.value||'';
   const dateLabel=from&&to?`${from} → ${to}`:(bannerSub.includes('All Time')?'All Time':'');
   const usersLabel=SEL.rptStepUser?.length?`Engineers: ${SEL.rptStepUser.join(', ')}`:'Engineers: All';
-  const filtersLine=`Product: ${productLabel}  |  Date: ${dateLabel}  |  ${usersLabel}  |  ${bannerMeta}`;
+  const pspLabel=SEL.rptPspUser?.length?`Surgical plan users: ${SEL.rptPspUser.length} selected  |  `:'';
+  const filtersLine=`Product: ${productLabel}  |  Date: ${dateLabel}  |  ${pspLabel}${usersLabel}  |  ${bannerMeta}`;
   const layoutMode=document.getElementById('rptLayoutMode')?.value||'auto';
 
   // Hide UI chrome during capture
   const hiddenEls=[];
-  ['.copy-btn','.chart-settings-btn','.rcs-panel','#rptVolToggles',
+  ['.copy-btn','.chart-settings-btn','.rcs-panel','.ltg-dd','#rptVolToggles',
    '#rptWipWeeklyBtn','#rptWipMonthlyBtn','#rptExportBtn','#rptGenerateBtn'].forEach(sel=>{
     document.querySelectorAll(sel).forEach(el=>{
       hiddenEls.push({el,v:el.style.visibility});
@@ -5258,7 +5693,8 @@ async function exportReportPdf(){
     }
 
     const cards=[...outputEl.querySelectorAll('.rpt-chart-card')]
-      .filter(c=>c.style.display!=='none'&&c.offsetParent!==null);
+      .filter(c=>c.style.display!=='none'&&c.offsetParent!==null)
+      .sort((a,b)=>{const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();return (Math.round(ra.top/20)-Math.round(rb.top/20))||(ra.left-rb.left);});   // two columns -> read row by row
 
     let pageNum=1;
     let yPos=HDR_H+4;
