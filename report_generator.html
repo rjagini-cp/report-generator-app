@@ -971,7 +971,7 @@
                 <button class="chart-toggle" id="rptWipMonthlyBtn" onclick="setRptWipGran('monthly',this)">Monthly</button>
               </div>
               <div class="rpt-chart-wrap"><canvas id="rptWipChart"></canvas></div>
-              <div class="logic-caption">Cases in digital production pipeline (Scan Assessment → Peer Review) at end of each period. A case exits WIP when its peer review date falls before the period end — regardless of current phase. Excludes on-hold and marketing surgeon cases at every snapshot. Click a point to view cases in that snapshot.</div>
+              <div class="logic-caption">Cases in digital production at the end of each period, using the same rules as the current-WIP tiles (Segmentation + PSP/Design + Peer Review), so today's point equals those tiles. Left out: Surgeon Approval (waiting on the surgeon before or after PSP review), Manufacturing, On Hold, marketing surgeons, and cases in Shipping / Surgery / Manufacturing with no completion date. Past dates are rebuilt from sign-off dates and hold / design-call events. Click a point to view cases in that snapshot.</div>
             </div>
 
               <div class="rpt-chart-card rpt-std" id="rptCard_fpy" style="position:relative">

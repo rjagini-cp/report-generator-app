@@ -8,8 +8,9 @@ What it does
        chart  : /analytics/report/wip-trend (weekly + monthly points) and the case list behind each point
   2. Pulls one row per case straight from BigQuery (raw Case table, so cases that are COMPLETED today are included)
      plus the on-hold event history.
-  3. Rebuilds the tiles and the chart in pandas, checks the rebuild equals what the page shows ("replication check"),
-     then rebuilds an event-accurate REFERENCE (who was really in digital production on each date).
+  3. Rebuilds the tiles and the chart in pandas, checks the rebuild equals what the page shows ("replication check";
+     both the rules BEFORE and AFTER the WIP fix are rebuilt, so it works on either version of the app),
+     then rebuilds a REFERENCE that also counts cases outside vw_fact_case.
   4. Reports, case by case, WHY the numbers differ:
        - tiles vs chart, today
        - chart vs reference for every snapshot of the month (a "bridge" of each quirk)
@@ -33,10 +34,11 @@ import sys
 import pandas as pd
 
 INTAKE = ['Case Intake', 'Restor3d MedEd', 'Cody Case Intake']       # build_where_clause() default intake filter
-DATE_COLS = ['first_scan', 'ship', 'seg', 'first_psp', 'surg_app', 'peer', 'scan_assess']
+DATE_COLS = ['first_scan', 'ship', 'seg', 'first_psp', 'surg_app', 'peer', 'scan_assess', 'dcp', 'call']
 BOOL_COLS = ['in_view', 'deleted', 'on_hold', 'canceled', 'reject']
 SNAP_OUT = []          # lines of SUMMARY.txt
 FAR_FUTURE = pd.Timestamp('2100-01-01')
+TODAY = pd.Timestamp(dt.date.today())
 
 
 def say(line=""):
@@ -47,6 +49,13 @@ def say(line=""):
 # ───────────────────────────── data ─────────────────────────────
 CASES_SQL = """
 WITH {signoff},
+design_call AS (
+    SELECT caseId, MIN(DATE(CAST(startTime AS TIMESTAMP))) AS call_date
+    FROM {design_call_tbl}
+    WHERE LOWER(COALESCE(CAST(cancelled AS STRING), 'false')) = 'false'
+      AND LOWER(COALESCE(CAST(deleted AS STRING), 'false')) = 'false' AND startTime IS NOT NULL
+    GROUP BY caseId
+),
 case_pipeline AS (
     SELECT w.caseId,
         MIN(CASE WHEN wm.name = 'Scan Assessment' AND w.workModuleUserType = 'WORKER'
@@ -74,7 +83,8 @@ SELECT base.id AS caseId,
     sd.seg_review_date AS seg, sd.first_psp_review_date AS first_psp,
     sd.surgeon_approval_date AS surg_app, sd.peer_review_date AS peer,
     COALESCE(sd.surgeon_last_action_reject, false) AS reject,
-    cp.scan_assess, COALESCE(cp.dcp_done, 0) AS dcp_done
+    cp.scan_assess, COALESCE(cp.dcp_done, 0) AS dcp_done,
+    sd.design_call_prep_date AS dcp, dc.call_date AS call
 FROM {case_tbl} base
 JOIN {category_tbl} cc ON base.caseCategoryId = cc.id
 LEFT JOIN {type_tbl} ct ON base.caseTypeId = ct.id
@@ -82,10 +92,13 @@ LEFT JOIN {view_tbl} f ON base.id = f.id
 LEFT JOIN {stage_tbl} s ON base.id = s.caseId
 LEFT JOIN signoff_dates sd ON base.id = sd.caseId
 LEFT JOIN case_pipeline cp ON base.id = cp.caseId
+LEFT JOIN design_call dc ON base.id = dc.caseId
 WHERE base.deleted = false
-  AND (s.first_scan_upload_date IS NOT NULL OR cp.scan_assess IS NOT NULL)
-  AND LEAST(COALESCE(sd.peer_review_date, DATE '9999-12-31'),
-            COALESCE(DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP)), DATE '9999-12-31')) > DATE '{first_snap}'
+  AND (s.first_scan_upload_date IS NOT NULL OR cp.scan_assess IS NOT NULL OR sd.seg_review_date IS NOT NULL
+       OR sd.first_psp_review_date IS NOT NULL OR COALESCE(f.phase, base.phase) = 'MANUFACTURING')
+  AND (LEAST(COALESCE(sd.peer_review_date, DATE '9999-12-31'),
+             COALESCE(DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP)), DATE '9999-12-31')) > DATE '{first_snap}'
+       OR COALESCE(f.phase, base.phase) = 'MANUFACTURING')
 """
 HOLD_SQL = """
 SELECT refId AS caseId, type, CAST(timestamp AS TIMESTAMP) AS ts
@@ -103,7 +116,7 @@ def load_live(a, first_snap):
     sql = CASES_SQL.format(
         signoff=app.signoff_cte(), signoff_tbl=t('WorkModuleSignoff'), instance_tbl=t('WorkModuleInstance'),
         module_tbl=t('WorkModule'), case_tbl=t('Case'), category_tbl=t('CaseCategory'), type_tbl=t('CaseType'),
-        view_tbl=t('vw_fact_case'), stage_tbl=t('vw_lkup_stage_log_dates'), first_snap=first_snap)
+        view_tbl=t('vw_fact_case'), stage_tbl=t('vw_lkup_stage_log_dates'), design_call_tbl=t('DesignCall'), first_snap=first_snap)
     print("Pulling one row per case from BigQuery ...")
     cases = app.client.query(sql).to_dataframe()
     print(f"  {len(cases):,} cases")
@@ -135,6 +148,7 @@ def normalise(cases):
     df["marketing"] = ((df["phy_nameFirst"].fillna("") + " " + df["phy_nameLast"].fillna(""))
                        .str.lower().str.contains("marketing"))
     df["exit"] = df[["peer", "ship"]].min(axis=1)                     # LEAST(peer review, ship) as the chart does
+    df["start"] = df[["first_scan", "scan_assess", "seg"]].min(axis=1)  # chart start after the fix
     return df.set_index("caseId", drop=False)
 
 
@@ -186,72 +200,87 @@ def on_hold_at(df, intervals, snap):
 
 # ───────────────────────────── the page's logic, rebuilt ─────────────────────────────
 def tile_flags(df):
-    """The five tile rules from analytics_wip(), one boolean column each (cases from vw_fact_case only)."""
+    """The five tile rules from analytics_wip() AFTER the WIP fix (one predicate per tile, mutually exclusive)."""
     f = df[df["in_view"] & false_(df["deleted"]) & df["intake"].isin(INTAKE)]
     past_psp = f["first_psp"].notna() | f["peer"].notna() | f["ship"].notna()
     awaiting = (f["dcp_done"] == 1) & (f["work_queue"] == "PLANNING_REVIEW")
     ok = false_(f["on_hold"]) & false_(f["canceled"])
-    phase_ok = ~f["phase"].isin(["SHIPPING", "SURGERY"])
+    phase_dp = ~f["phase"].isin(["SHIPPING", "SURGERY", "MANUFACTURING"])
     rej = true_(f["reject"])
+    mk = ~f["marketing"]
     first_psp_wait = f["first_psp"].notna() & f["surg_app"].isna() & f["peer"].isna() & f["ship"].isna()
     t = pd.DataFrame(index=f.index)
-    t["segmentation"] = f["first_scan"].notna() & f["seg"].isna() & ok & phase_ok
-    t["psp_design"] = ((f["seg"].notna() & ~past_psp & ok & phase_ok & ~awaiting)
-                       | (first_psp_wait & rej & ok & phase_ok))
-    t["surgeon_approval"] = ((first_psp_wait & ~rej & ok & phase_ok)
-                             | (f["seg"].notna() & ~past_psp & ok & phase_ok & awaiting))
-    t["peer_review"] = (past_psp & f["peer"].isna() & f["ship"].isna() & ok
-                        & ~f["phase"].isin(["SHIPPING", "SURGERY", "MANUFACTURING"])
-                        & ~(f["first_psp"].notna() & f["surg_app"].isna() & ~rej) & ~f["marketing"])
-    t["manufacturing"] = (f["phase"] == "MANUFACTURING") & ok & f["ship"].isna() & ~f["marketing"]
+    t["segmentation"] = f["first_scan"].notna() & f["seg"].isna() & ~past_psp & ok & phase_dp & mk
+    t["psp_design"] = ((f["seg"].notna() & ~past_psp & ok & phase_dp & ~awaiting & mk)
+                       | (first_psp_wait & rej & ok & phase_dp & mk))
+    t["surgeon_approval"] = ((first_psp_wait & ~rej & ok & phase_dp & mk)
+                             | (f["seg"].notna() & ~past_psp & ok & phase_dp & awaiting & mk))
+    t["peer_review"] = (past_psp & f["peer"].isna() & f["ship"].isna() & ok & phase_dp
+                        & ~(f["first_psp"].notna() & f["surg_app"].isna()) & mk)
+    t["manufacturing"] = (f["phase"] == "MANUFACTURING") & ok & f["ship"].isna() & mk
     return t
 
 
 def surgeon_wait_at(df, snap):
+    """Waiting on the surgeon after PSP review, on that date (timestamps only)."""
     s = pd.Timestamp(snap)
     return (df["first_psp"].notna() & (df["first_psp"] <= s) & (df["surg_app"].isna() | (df["surg_app"] > s))
-            & ~true_(df["reject"]) & (df["peer"].isna() | (df["peer"] > s)))
+            & (df["peer"].isna() | (df["peer"] > s)))
 
 
-def page_chart_members(df, snap):
-    """report_wip_trend(): current-state flags applied to every date, vw_fact_case only, no intake/phase rules."""
+def old_surgeon_wait_at(df, snap):
+    return surgeon_wait_at(df, snap) & ~true_(df["reject"])
+
+
+def chart_members(df, snap, intervals, in_view_only=True):
+    """The chart AFTER the WIP fix (report_wip_trend). in_view_only=False also counts cases outside vw_fact_case
+    (intake / marketing / work queue are unknown for those, so those rules are skipped) = the REFERENCE."""
+    s = pd.Timestamp(snap)
+    now = s >= TODAY
+    r = df[df["in_view"]] if in_view_only else df
+    known = r["in_view"]
+    r = r[false_(r["deleted"]) & false_(r["canceled"]) & (~known | r["intake"].isin(INTAKE)) & ~r["marketing"] & r["start"].notna()]
+    r = r[(r["start"] <= s) & (r["exit"].isna() | (r["exit"] > s))]
+    r = r[~(r["exit"].isna() & r["phase"].isin(["SHIPPING", "SURGERY", "MANUFACTURING"]))]
+    r = r[~(true_(r["on_hold"]) if now else on_hold_at(r, intervals, snap))]
+    r = r[~surgeon_wait_at(r, snap)]
+    queue = (r["work_queue"] == "PLANNING_REVIEW")
+    past_psp = r["first_psp"].notna() | r["peer"].notna() | r["ship"].notna()
+    if now:
+        pre = r["seg"].notna() & ~past_psp & r["dcp"].notna() & queue
+    else:
+        pre = (r["dcp"].notna() & (r["dcp"] <= s) & (r["first_psp"].isna() | (r["first_psp"] > s))
+               & ((r["call"] > s) | (r["call"].isna() & r["seg"].notna() & ~past_psp & queue)))
+    return r[~pre].index
+
+
+def old_chart_members(df, snap):
+    """The chart BEFORE the WIP fix: vw_fact_case only, today's hold flag, no intake / phase rule, Scan Assessment start."""
     v = df[df["in_view"] & false_(df["deleted"]) & false_(df["canceled"]) & false_(df["on_hold"])
            & ~df["marketing"] & df["scan_assess"].notna()]
     s = pd.Timestamp(snap)
     inwip = (v["scan_assess"] <= s) & (v["exit"].isna() | (v["exit"] > s))
-    return v[inwip & ~surgeon_wait_at(v, snap)].index
-
-
-def reference_members(df, intervals, snap):
-    """Event-accurate digital-production WIP on `snap`: same entry/exit/surgeon-wait rules as the chart, but
-    every case is considered (including ones COMPLETED today) and on hold means on hold ON THAT DATE."""
-    r = df[false_(df["deleted"]) & false_(df["canceled"]) & ~df["marketing"] & df["scan_assess"].notna()]
-    s = pd.Timestamp(snap)
-    inwip = (r["scan_assess"] <= s) & (r["exit"].isna() | (r["exit"] > s))
-    held = on_hold_at(r, intervals, snap)
-    return r[inwip & ~held & ~surgeon_wait_at(r, snap)].index
+    return v[inwip & ~old_surgeon_wait_at(v, snap)].index
 
 
 # ───────────────────────────── explanations ─────────────────────────────
 def why_not_on_chart(row, snap):
+    """Why a case that is in the tiles is not on the chart (new rules; first failing rule)."""
     s = pd.Timestamp(snap)
     if not row["in_view"]:
         return "not in vw_fact_case"
-    if true_(pd.Series([row["canceled"]])).iloc[0]:
-        return "canceled"
-    if true_(pd.Series([row["on_hold"]])).iloc[0]:
-        return "on hold now (chart drops it)"
+    if row["intake"] not in INTAKE:
+        return f"Case_In_Take = {row['intake']!r}"
     if row["marketing"]:
-        return "marketing surgeon (chart excludes everywhere; Segmentation/PSP tiles do not)"
-    if pd.isna(row["scan_assess"]):
-        return "no Scan Assessment worker-accept (chart needs it; tile starts at first scan upload)"
-    if row["scan_assess"] > s:
+        return "marketing surgeon"
+    if pd.isna(row["start"]):
+        return "no start date (no first scan / scan assessment / segmentation)"
+    if row["start"] > s:
         return "entered after the snapshot"
     if pd.notna(row["exit"]) and row["exit"] <= s:
         return "already exited (peer review / ship date on or before the snapshot)"
-    if (pd.notna(row["first_psp"]) and row["first_psp"] <= s and (pd.isna(row["surg_app"]) or row["surg_app"] > s)
-            and not row["reject"]):
-        return "waiting on the surgeon (chart excludes Surgeon Approval)"
+    if pd.isna(row["exit"]) and row["phase"] in ("SHIPPING", "SURGERY", "MANUFACTURING"):
+        return f"phase = {row['phase']} with no peer review / ship date"
     return "other"
 
 
@@ -266,10 +295,8 @@ def why_not_in_dp_tiles(row, tiles_row_names):
         return "not in vw_fact_case"
     if row["intake"] not in INTAKE:
         return f"Case_In_Take = {row['intake']!r} (tiles only count {', '.join(INTAKE)})"
-    if row["phase"] in ("SHIPPING", "SURGERY"):
-        return f"phase = {row['phase']} (tiles exclude it) but no peer review / ship date so the chart keeps it"
-    if row["phase"] == "MANUFACTURING":
-        return "phase = MANUFACTURING (own tile) without a peer review / ship date"
+    if row["phase"] in ("SHIPPING", "SURGERY", "MANUFACTURING"):
+        return f"phase = {row['phase']} with no peer review / ship date"
     return "matches none of the tile rules"
 
 
@@ -351,7 +378,7 @@ def main():
     say(f"WIP DIAGNOSTIC   month {a.month}   today = {asof.date()}   filters: product={a.product or 'all'}  case type={a.case_type or 'all'}")
     say("=" * 100)
 
-    # ── 1. what the page shows vs what my rebuild gives ────────────────────────
+    # ── 1. tiles ───────────────────────────────────────────────────────────────
     tf = tile_flags(df)
     mine_tiles = {k: int(tf[k].sum()) for k in tf.columns}
     say("\n1) CURRENT WIP TILES (no date filter - every case alive right now)")
@@ -359,37 +386,40 @@ def main():
     page_tiles = (page or {}).get("tiles") or {}
     for k in tf.columns:
         pv = page_tiles.get(k, "n/a")
-        say(f"{k:<18}{str(pv):>8}{mine_tiles[k]:>9}" + ("" if pv == "n/a" or pv == mine_tiles[k] else "   <-- MISMATCH"))
+        say(f"{k:<18}{str(pv):>8}{mine_tiles[k]:>9}" + ("" if pv == "n/a" or pv == mine_tiles[k] else "   <-- differs (see TILE REPLICATION DETAIL in section 6)"))
     dp_tiles = int(tf[["segmentation", "psp_design", "peer_review"]].any(axis=1).sum())
     say(f"Digital-production tiles (Segmentation + PSP/Design + Peer Review): {mine_tiles['segmentation'] + mine_tiles['psp_design'] + mine_tiles['peer_review']}"
         f"   (distinct cases: {dp_tiles})")
     multi = tf.sum(axis=1)
     dbl = tf[multi > 1]
-    say(f"Cases counted in MORE THAN ONE tile: {len(dbl)}" + ("" if dbl.empty else "   e.g. " + ", ".join(f"{i[:8]}:{'+'.join(k for k in tf.columns if dbl.loc[i, k])}" for i in dbl.index[:5])))
+    say(f"Cases counted in MORE THAN ONE tile: {len(dbl)}" + ("   (the WIP fix makes the tiles mutually exclusive; 0 is expected after deploying it)" if len(dbl) == 0 else "   e.g. " + ", ".join(f"{i[:8]}:{'+'.join(k for k in tf.columns if dbl.loc[i, k])}" for i in dbl.index[:5])))
 
-    say("\n2) WIP TREND CHART POINTS")
+    # ── 2. chart ───────────────────────────────────────────────────────────────
+    say("\n2) WIP TREND CHART POINTS   (old = rules before the WIP fix, new = after; the page equals whichever version is deployed)")
     rows = []
     for gran in ("weekly", "monthly"):
-        say(f"  {gran}: period start -> snapshot date | page | rebuilt | reference (event-accurate) | page minus reference")
+        say(f"  {gran}: period start -> snapshot | page | old rules | new rules | reference (incl. cases outside the view) | new - reference")
         for start, end in snaps[gran]:
-            mine = len(page_chart_members(df, end))
-            ref = len(reference_members(df, intervals, end))
+            old = len(old_chart_members(df, end))
+            new = len(chart_members(df, end, intervals))
+            ref = len(chart_members(df, end, intervals, in_view_only=False))
             pg = ((page or {}).get("chart", {}).get(gran, {}) or {}).get(start.strftime("%Y-%m-%d"), "n/a")
-            flag = "" if pg == "n/a" or pg == mine else "   <-- rebuilt != page"
-            say(f"    {start.date()} -> {end.date()} | {str(pg):>5} | {mine:>5} | {ref:>5} | {(mine - ref):>+5}{flag}")
-            rows.append({"granularity": gran, "period_start": start.date(), "snapshot": end.date(), "page": pg,
-                         "rebuilt": mine, "reference": ref})
+            flag = "" if pg == "n/a" or pg in (old, new) else "   <-- page matches neither rebuild"
+            who = "" if pg == "n/a" else ("   (page = new rules)" if pg == new and pg != old else "   (page = old rules)" if pg == old and pg != new else "")
+            say(f"    {start.date()} -> {end.date()} | {str(pg):>5} | {old:>5} | {new:>5} | {ref:>5} | {(new - ref):>+5}{flag}{who}")
+            rows.append({"granularity": gran, "period_start": start.date(), "snapshot": end.date(), "page": pg, "old_rules": old, "new_rules": new, "reference": ref})
     pd.DataFrame(rows).to_csv(os.path.join(a.out, "chart_points.csv"), index=False)
 
     # ── 3. today: tiles vs chart ───────────────────────────────────────────────
     say("\n" + "-" * 100)
-    say(f"3) TODAY ({asof.date()}): DIGITAL-PRODUCTION TILES vs THE CHART'S CURRENT POINT")
-    chart_now = set(page_chart_members(df, asof))
+    say(f"3) TODAY ({asof.date()}): DIGITAL-PRODUCTION TILES vs THE CHART'S CURRENT POINT (new rules)")
+    chart_now = set(chart_members(df, asof, intervals))
     tile_dp = set(tf.index[tf[["segmentation", "psp_design", "peer_review"]].any(axis=1)])
     say(f"  tiles (Seg + PSP/Design + Peer Review, distinct cases): {len(tile_dp)}")
-    say(f"  chart (Digital Production WIP now):                     {len(chart_now)}")
+    say(f"  chart (Digital Production WIP now, new rules):          {len(chart_now)}")
     only_tile, only_chart = sorted(tile_dp - chart_now), sorted(chart_now - tile_dp)
-    say(f"  in tiles but NOT on the chart: {len(only_tile)}      on the chart but NOT in the DP tiles: {len(only_chart)}")
+    say(f"  in tiles but NOT on the chart: {len(only_tile)}      on the chart but NOT in the DP tiles: {len(only_chart)}"
+        + ("      -> EQUAL" if not only_tile and not only_chart else ""))
     t_rows = []
     for cid in only_tile:
         t_rows.append({"caseId": cid, "alias": df.loc[cid, "alias"], "side": "tiles_only", "reason": why_not_on_chart(df.loc[cid], asof)})
@@ -401,86 +431,92 @@ def main():
     td.to_csv(os.path.join(a.out, "today_tiles_vs_chart.csv"), index=False)
     for side, title in (("tiles_only", "In the tiles, missing from the chart"), ("chart_only", "On the chart, missing from the DP tiles")):
         sub = td[td["side"] == side]
-        say(f"\n  {title}: {len(sub)}")
-        for reason, n in sub["reason"].value_counts().items():
-            ex = ", ".join(sub[sub["reason"] == reason]["alias"].astype(str).head(3))
-            say(f"    {n:>4}  {reason}   e.g. {ex}")
-    other = {k: mine_tiles[k] for k in ("surgeon_approval", "manufacturing")}
+        if len(sub):
+            say(f"\n  {title}: {len(sub)}")
+            for reason, n in sub["reason"].value_counts().items():
+                ex = ", ".join(sub[sub["reason"] == reason]["alias"].astype(str).head(3))
+                say(f"    {n:>4}  {reason}   e.g. {ex}")
     on_hold_now = int((df["in_view"] & false_(df["deleted"]) & df["intake"].isin(INTAKE) & true_(df["on_hold"])).sum())
-    say(f"\n  Not digital-production but on the tile strip: Surgeon Approval {other['surgeon_approval']}, Manufacturing {other['manufacturing']}, On Hold {on_hold_now}"
-        f"  -> the whole strip adds up to {sum(mine_tiles.values()) + on_hold_now}, a different thing from the chart")
+    say(f"\n  The tile strip also holds Surgeon Approval {mine_tiles['surgeon_approval']}, Manufacturing {mine_tiles['manufacturing']}, On Hold {on_hold_now}"
+        f"  -> {sum(mine_tiles.values()) + on_hold_now} in all; those are not digital production, so they are not on the chart")
 
-    # ── 4. each snapshot: chart vs reference ───────────────────────────────────
+    # ── 4. each snapshot: chart (new) vs reference ─────────────────────────────
     say("\n" + "-" * 100)
-    say("4) EACH SNAPSHOT: CHART vs EVENT-ACCURATE REFERENCE  (what the chart would show if it looked at history correctly)")
+    say("4) EACH SNAPSHOT: CHART (new rules) vs REFERENCE (same rules, but also counting cases outside vw_fact_case)")
     bridge = []
     for gran in ("weekly", "monthly"):
         for start, end in snaps[gran]:
-            page_set = set(page_chart_members(df, end))
-            ref_set = set(reference_members(df, intervals, end))
-            only_ref, only_page = sorted(ref_set - page_set), sorted(page_set - ref_set)
-            reasons_ref, reasons_page = {}, {}
+            page_set = set(chart_members(df, end, intervals))
+            ref_set = set(chart_members(df, end, intervals, in_view_only=False))
+            only_ref = sorted(ref_set - page_set)
+            reasons = {}
             for cid in only_ref:
                 r = df.loc[cid]
-                if not r["in_view"]:
-                    k = "missing from the chart: not in vw_fact_case (e.g. COMPLETED since)"
-                elif true_(pd.Series([r["on_hold"]])).iloc[0]:
-                    k = "missing from the chart: on hold NOW (chart applies today's hold flag to past dates)"
-                else:
-                    k = "missing from the chart: other"
-                reasons_ref[k] = reasons_ref.get(k, 0) + 1
+                k = ("not in vw_fact_case AND no peer review / ship date at all (never 'exits')" if pd.isna(r["exit"])
+                     else "not in vw_fact_case, exited after the snapshot (completed since)")
+                reasons[k] = reasons.get(k, 0) + 1
                 bridge.append({"granularity": gran, "snapshot": end.date(), "caseId": cid, "alias": r["alias"], "side": "reference_only", "reason": k})
-            for cid in only_page:
-                r = df.loc[cid]
-                k = "extra on the chart: was on hold on that date, chart ignores historical holds"
-                reasons_page[k] = reasons_page.get(k, 0) + 1
-                bridge.append({"granularity": gran, "snapshot": end.date(), "caseId": cid, "alias": r["alias"], "side": "page_only", "reason": k})
             say(f"\n  {gran} {start.date()} -> {end.date()}:  chart {len(page_set)}   reference {len(ref_set)}   gap {len(page_set) - len(ref_set):+d}")
-            for k, n in sorted(reasons_ref.items(), key=lambda kv: -kv[1]):
+            for k, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
                 say(f"      -{n:>4}  {k}")
-            for k, n in sorted(reasons_page.items(), key=lambda kv: -kv[1]):
-                say(f"      +{n:>4}  {k}")
-    pd.DataFrame(bridge, columns=["granularity", "snapshot", "caseId", "alias", "side", "reason"]).to_csv(os.path.join(a.out, "chart_vs_reference.csv"), index=False)
+    br = pd.DataFrame(bridge, columns=["granularity", "snapshot", "caseId", "alias", "side", "reason"])
+    br.to_csv(os.path.join(a.out, "chart_vs_reference.csv"), index=False)
+
+    # ── 6. outside the view + tile replication detail ───────────────────────────
+    say("\n" + "-" * 100)
+    say("6) CASES OUTSIDE vw_fact_case THAT A DATE-BASED VIEW OF WIP WOULD COUNT (today's snapshot)")
+    ref_today = chart_members(df, asof, intervals, in_view_only=False)
+    outside = df.loc[[c for c in ref_today if not df.loc[c, "in_view"]]]
+    say(f"  {len(outside)} cases: scan assessed, no peer review / ship date, not canceled, not on hold, but not in vw_fact_case")
+    if len(outside):
+        for col, title in (("phase", "by phase"), ("intake", "by Case_In_Take"), ("product", "by product")):
+            vc = outside[col].fillna("(none)").value_counts().head(8)
+            say(f"    {title}: " + ", ".join(f"{k} {v}" for k, v in vc.items()))
+        yrs = outside["start"].dt.year.fillna(0).astype(int).value_counts().sort_index()
+        say("    year of first scan / scan assessment: " + ", ".join(f"{y or '?'} {n}" for y, n in yrs.items()))
+        say(f"    with a PSP review date: {int(outside['first_psp'].notna().sum())}   with a peer review date: {int(outside['peer'].notna().sum())}   with a ship date: {int(outside['ship'].notna().sum())}")
+        outside.drop(columns=["exit"]).to_csv(os.path.join(a.out, "outside_view_cases.csv"), index=False)
+    say("\n  TILE REPLICATION DETAIL (page's case list vs my rebuild; lists stop at 500 rows)")
+    lists = (page or {}).get("lists", {}) or {}
+    for k in tf.columns:
+        pl = lists.get("tile_" + k)
+        if not pl:
+            continue
+        if any(str(x).startswith("…") for x in pl):
+            say(f"    {k}: page list truncated at 500, skipped")
+            continue
+        pids, mine = set(pl), set(tf.index[tf[k]])
+        extra_page, extra_mine = sorted(pids - mine), sorted(mine - pids)
+        if not extra_page and not extra_mine:
+            say(f"    {k}: lists identical ({len(pids)} cases)")
+            continue
+        missing = [c for c in extra_page if c not in df.index]
+        present = [c for c in extra_page if c in df.index]
+        say(f"    {k}: page has {len(extra_page)} cases my rebuild lacks ({len(missing)} not in my pull, {len(present)} in my pull but failing my rule); "
+            f"my rebuild has {len(extra_mine)} the page lacks   (if the WIP fix is not deployed yet this is expected)")
+        for c in present[:3]:
+            r = df.loc[c]
+            say(f"        {r['alias']}: phase={r['phase']} on_hold={r['on_hold']} canceled={r['canceled']} intake={r['intake']} peer={r['peer']} ship={r['ship']} marketing={r['marketing']}")
 
     # ── findings ────────────────────────────────────────────────────────────────
     say("\n" + "-" * 100)
-    say("FINDINGS (counts are from this run)")
-    br = pd.DataFrame(bridge, columns=["granularity", "snapshot", "caseId", "alias", "side", "reason"])
-    wk = br[br["granularity"] == "weekly"]
-    def per_snapshot_max(frame, text):
-        sub = frame[frame["reason"].str.contains(text, regex=False)]
-        return 0 if sub.empty else int(sub.groupby("snapshot").size().max())
-    n_view = per_snapshot_max(wk, "not in vw_fact_case")
-    n_hold = per_snapshot_max(wk, "on hold NOW")
-    n_hold2 = per_snapshot_max(wk, "ignores historical holds")
-    if n_view:
-        say(f"  * Up to {n_view} cases per weekly point are missing from the chart only because they are not in vw_fact_case (completed since).")
-        say("    -> the trend should read the raw Case table, as the volume and lead-time queries already do.")
-    if n_hold or n_hold2:
-        say(f"  * The chart uses TODAY's on-hold flag for every past date: up to {n_hold} cases wrongly dropped and {n_hold2} wrongly kept on a single point.")
-        say("    -> use the hold events (put on hold / removed from hold) to decide if a case was on hold on that date.")
-    for text, label, fix in (("no Scan Assessment", "cases that have a first scan upload but no Scan Assessment accept (tiles count them, chart does not)", "pick one start event for both"),
-                             ("marketing surgeon", "marketing-surgeon cases (tiles keep them in Segmentation / PSP, chart drops them)", "apply the marketing rule to every tile or to none"),
-                             ("Case_In_Take", "cases with another Case_In_Take value (chart counts them, tiles do not)", "apply the same intake rule to the chart"),
-                             ("phase = SHIPPING", "cases in SHIPPING / SURGERY phase with no ship date (chart keeps them forever)", "treat those phases as exited in the chart"),
-                             ("manufacturing tile", "cases in MANUFACTURING with no peer review accept (chart counts them as digital production, tiles do not)", "decide whether manufacturing is still digital production")):
-        n = int(td["reason"].str.contains(text, regex=False).sum()) if len(td) else 0
-        if n:
-            say(f"  * {n} {label}.   -> {fix}")
-    if len(dbl):
-        say(f"  * {len(dbl)} cases are counted in more than one tile, so adding the tiles up double counts them.")
-    say(f"  * The tile strip ({sum(mine_tiles.values()) + on_hold_now}) also contains Surgeon Approval, Manufacturing and On Hold, which are not digital production; "
-        f"the like-for-like tile number is {len(tile_dp)}.")
+    say("FINDINGS")
+    cp = pd.DataFrame(rows)
+    wk = cp[cp["granularity"] == "weekly"]
+    if len(wk):
+        say(f"  * Weekly points, old rules -> new rules: " + ", ".join(f"{int(r.old_rules)}->{int(r.new_rules)}" for r in wk.itertuples()))
+    say(f"  * Today: digital-production tiles {len(tile_dp)} vs chart {len(chart_now)}" + ("  (equal)" if tile_dp == chart_now else f"  ({len(only_tile)} tiles-only, {len(only_chart)} chart-only, listed above)"))
+    nev = int(br["reason"].str.contains("never 'exits'", regex=False).groupby(br["snapshot"]).sum().max()) if len(br) else 0
+    if nev:
+        say(f"  * About {nev} cases outside vw_fact_case have no exit date at all; the chart does not count them (see section 6 for what they are).")
 
-    # ── 5. standing differences between the two definitions ─────────────────────
+    # ── 5. definitions ──────────────────────────────────────────────────────────
     say("\n" + "-" * 100)
-    say("5) HOW THE TWO DEFINITIONS DIFFER (from the code)")
-    say("  Tiles  : vw_fact_case, Case_In_Take in (Case Intake, Restor3d MedEd, Cody Case Intake), phase must not be SHIPPING/SURGERY,")
-    say("           start = first scan upload, stages by phase + sign-off dates; marketing cases only excluded in Peer Review / Manufacturing;")
-    say("           the strip also contains Surgeon Approval and Manufacturing, which are not digital production.")
-    say("  Chart  : vw_fact_case only (misses cases that are COMPLETED today), NO intake or phase rule, start = Scan Assessment worker accept,")
-    say("           exit = peer review accept or ship date, drops Surgeon-Approval waiters, drops marketing everywhere, and applies TODAY's")
-    say("           on-hold / canceled flags to every past date.")
+    say("5) THE DEFINITION (after the WIP fix)")
+    say("  Tiles and chart share one rule set: vw_fact_case, not deleted / canceled, Case_In_Take in (Case Intake, Restor3d MedEd, Cody Case Intake),")
+    say("  marketing surgeons excluded, not on hold, phase not SHIPPING / SURGERY / MANUFACTURING, not waiting on the surgeon (before or after PSP review).")
+    say("  Chart start = earliest of first scan upload / Scan Assessment accept / Segmentation accept; exit = peer review accept or ship date.")
+    say("  Past dates use sign-off dates plus hold and design-call events; today's point uses the live flags, so it equals the tiles.")
     open(os.path.join(a.out, "SUMMARY.txt"), "w", encoding="utf-8").write("\n".join(SNAP_OUT))
     say(f"\nWrote CSVs and SUMMARY.txt to {os.path.abspath(a.out)}")
 

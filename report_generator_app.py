@@ -20,6 +20,7 @@ import datetime
 import traceback
 
 import pandas as pd
+import numpy as np
 
 import anthropic
 
@@ -648,6 +649,9 @@ def volume_where_clause(args):
             LEFT JOIN `{PROJECT}.{DATASET}.WorkModule` wm_flt ON wi_flt.workModuleId = wm_flt.id
             WHERE {sub_where}
         )""")
+    _pc = psp_user_cond(args, 'f')
+    if _pc:
+        conditions.append(_pc)
     return " AND ".join(conditions)
 
 def format_cases(df):
@@ -739,6 +743,9 @@ def build_where_clause(args, alias='f'):
             LEFT JOIN `{PROJECT}.{DATASET}.WorkModule` wm_flt ON wi_flt.workModuleId = wm_flt.id
             WHERE {sub_where}
         )""")
+    _pc = psp_user_cond(args, alias)
+    if _pc:
+        conditions.append(_pc)
     return " AND ".join(conditions)
 
 def sanitize(value: str) -> str:
@@ -925,25 +932,117 @@ def analytics_cases():
         return handle_error(request.endpoint, e)
 
 
+# ── Digital Production WIP: shared membership logic for the trend chart and its case lists ─────────────────────
+_WIP_INTAKE = "('Case Intake','Restor3d MedEd','Cody Case Intake')"
+
+
+def _wip_dp_ctes(periods_sql, vw_prod_cond):
+    """CTE chain (no leading WITH) that yields wip_membership(period_start, caseId): the cases in Digital Production
+    at each period's end date. Uses the SAME rules as the current-WIP tiles (analytics_wip), so today's point equals
+    Segmentation + PSP/Design + Peer Review:
+      * vw_fact_case, not deleted / canceled, Case_In_Take in the tile list, marketing surgeons excluded
+      * start = earliest of first scan upload / Scan Assessment accept / Segmentation accept
+      * exit  = earliest of Peer Review accept / ship date
+      * a case in SHIPPING / SURGERY / MANUFACTURING with no exit date is treated as already out of digital production
+      * excluded while waiting on the surgeon: after PSP review (timestamped), or before PSP review while Design Call Prep
+        is done and the call has not happened (events for past dates; the live work_queue for today and later)
+      * on hold: the hold EVENTS for past dates, the live onHold flag for today and later
+    Past dates are rebuilt from events; canceled / phase / intake are current-state (no history exists for them)."""
+    return f"""
+    {signoff_cte()},
+    {on_hold_cte()},
+    periods AS ({periods_sql}),
+    scan_assess AS (
+        SELECT w.caseId, MIN(DATE(CAST(w.createdAt AS TIMESTAMP))) AS scan_assess_date
+        FROM {tbl('WorkModuleSignoff')} w
+        JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
+        JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
+        WHERE w.deleted = false AND wm.name = 'Scan Assessment'
+          AND w.workModuleUserType = 'WORKER' AND w.workModuleSignatureType = 'ACCEPT'
+        GROUP BY w.caseId
+    ),
+    design_call AS (
+        SELECT caseId, MIN(DATE(CAST(startTime AS TIMESTAMP))) AS call_date
+        FROM {tbl('DesignCall')}
+        WHERE LOWER(COALESCE(CAST(cancelled AS STRING), 'false')) = 'false'
+          AND LOWER(COALESCE(CAST(deleted AS STRING), 'false')) = 'false'
+          AND startTime IS NOT NULL
+        GROUP BY caseId
+    ),
+    wip_base AS (
+        SELECT
+            f.id AS caseId, f.phase, COALESCE(f.onHold, false) AS on_hold_now, f.work_queue,
+            LEAST(COALESCE(DATE(CAST(s.first_scan_upload_date AS TIMESTAMP)), DATE '9999-12-31'),
+                  COALESCE(sa.scan_assess_date, DATE '9999-12-31'),
+                  COALESCE(sd.seg_review_date, DATE '9999-12-31')) AS start_date,
+            CASE WHEN sd.peer_review_date IS NOT NULL AND s.ship_wrk_comp_date IS NOT NULL
+                      THEN LEAST(sd.peer_review_date, DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP)))
+                 WHEN sd.peer_review_date IS NOT NULL THEN sd.peer_review_date
+                 WHEN s.ship_wrk_comp_date IS NOT NULL THEN DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP))
+                 ELSE NULL END AS exit_date,
+            sd.seg_review_date, sd.first_psp_review_date, sd.surgeon_approval_date, sd.peer_review_date,
+            sd.design_call_prep_date AS dcp_date, dc.call_date,
+            (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL
+                 OR s.ship_wrk_comp_date IS NOT NULL) AS past_psp_now
+        FROM {tbl('vw_fact_case')} f
+        LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON f.id = s.caseId
+        LEFT JOIN signoff_dates sd ON f.id = sd.caseId
+        LEFT JOIN scan_assess sa ON f.id = sa.caseId
+        LEFT JOIN design_call dc ON f.id = dc.caseId
+        WHERE f.deleted = false AND f.canceled = false
+          AND f.Case_In_Take IN {_WIP_INTAKE}
+          AND (LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')
+          {vw_prod_cond}
+    ),
+    hold_events AS (
+        SELECT refId AS caseId, type, CAST(timestamp AS TIMESTAMP) AS ts
+        FROM {tbl('vw_event_log_rank')}
+        WHERE type IN ('r3idCasePutOnHold', 'r3idCaseRemovedFromOnHold')
+    ),
+    hold_state AS (
+        SELECT period_start, caseId, (type = 'r3idCasePutOnHold') AS is_held
+        FROM (
+            SELECT p.period_start, e.caseId, e.type,
+                   ROW_NUMBER() OVER (PARTITION BY p.period_start, e.caseId ORDER BY e.ts DESC) AS rn
+            FROM periods p
+            CROSS JOIN hold_events e
+            WHERE p.period_end < CURRENT_DATE() AND DATE(e.ts) <= p.period_end
+        )
+        WHERE rn = 1
+    ),
+    wip_membership AS (
+        SELECT p.period_start, b.caseId
+        FROM periods p
+        CROSS JOIN wip_base b
+        LEFT JOIN hold_state h ON h.period_start = p.period_start AND h.caseId = b.caseId
+        WHERE b.start_date < DATE '9999-12-31'
+          AND b.start_date <= p.period_end
+          AND (b.exit_date IS NULL OR b.exit_date > p.period_end)
+          AND NOT (b.exit_date IS NULL AND COALESCE(b.phase, '') IN ('SHIPPING', 'SURGERY', 'MANUFACTURING'))
+          AND NOT (CASE WHEN p.period_end >= CURRENT_DATE() THEN b.on_hold_now ELSE COALESCE(h.is_held, false) END)
+          AND NOT COALESCE(b.first_psp_review_date IS NOT NULL AND b.first_psp_review_date <= p.period_end
+                   AND (b.surgeon_approval_date IS NULL OR b.surgeon_approval_date > p.period_end)
+                   AND (b.peer_review_date IS NULL OR b.peer_review_date > p.period_end), false)
+          AND NOT COALESCE(CASE WHEN p.period_end >= CURRENT_DATE()
+                        THEN (b.seg_review_date IS NOT NULL AND NOT b.past_psp_now AND b.dcp_date IS NOT NULL
+                              AND b.work_queue = 'PLANNING_REVIEW')
+                        ELSE (b.dcp_date IS NOT NULL AND b.dcp_date <= p.period_end
+                              AND (b.first_psp_review_date IS NULL OR b.first_psp_review_date > p.period_end)
+                              AND (b.call_date > p.period_end
+                                   OR (b.call_date IS NULL AND b.seg_review_date IS NOT NULL AND NOT b.past_psp_now
+                                       AND b.work_queue = 'PLANNING_REVIEW')))
+                   END, false)
+    )"""
+
+
 @app.route("/analytics/report/wip-trend", methods=["GET"])
 def report_wip_trend():
-    """Digital Production WIP trend — cases in pipeline at end of each period.
-    Matches Power BI WIP Daily logic:
-      Start = Scan Assessment WORKER ACCEPT (entered digital production)
-      End   = Peer Review REVIEWER ACCEPT (left digital production)
-      WIP at period end = cases where start <= period_end AND (end IS NULL OR end > period_end)
-    Excludes cases sitting in Surgeon Approval as of period end (PSP-reviewed, not yet
-    surgeon-approved, not sent back for rework, not yet at peer review) — Surgeon Approval
-    is tracked as its own separate stage (see analytics_wip), not part of Digital Production WIP.
-    NOTE: this only covers the "post-PSP-review" surgeon-approval path, using timestamped
-    signoff events, so it's accurate for every historical period. analytics_wip's surgeon_approval
-    bucket also has a rarer pre-PSP path (Design Call Prep + current work_queue='PLANNING_REVIEW')
-    that depends on a live status field with no historical timestamp — it can't be reconstructed
-    for past periods and is intentionally not excluded here.
-    Uses raw Case table (not vw_fact_case) so completed cases are included.
-    On-hold excluded via vw_event_log_rank snapshot per case.
-    Config: DataGenie_Report_Config.yaml → wip_trend
-    """
+    """Digital Production WIP trend - cases in digital production at the end of each period.
+    Follows the SAME rules as the current-WIP tiles (see _wip_dp_ctes), so the chart's current point equals
+    Segmentation + PSP/Design + Peer Review. Surgeon Approval (before or after PSP review), Manufacturing and
+    On Hold are not digital production and are left out. Past dates are rebuilt from sign-off dates and
+    hold / design-call events; canceled, phase and intake are current-state (they have no history).
+    fetch_period=<date> returns the cases behind a point (the page sends the period end date)."""
     try:
         args        = request.args
         granularity = args.get('granularity', 'weekly')
@@ -1001,72 +1100,18 @@ def report_wip_trend():
             types = [t.strip() for t in case_type.split(',')]
             joined_ct = "','".join(types)
             vw_prod_cond += f" AND f.case_type_name IN ('{joined_ct}')"
+        _pc = psp_user_cond(args, 'f')
+        if _pc:
+            vw_prod_cond += f" AND {_pc}"
 
         if fetch_period:
             validate_date(fetch_period)
-            snapshot_clause = f"DATE '{fetch_period}'"
+            snap_sql = f"SELECT DATE '{fetch_period}' AS period_start, DATE '{fetch_period}' AS period_end"
             fetch_query = f"""
-            WITH case_pipeline AS (
-                SELECT
-                    w.caseId,
-                    MIN(CASE WHEN wm.name = 'Scan Assessment'
-                                 AND w.workModuleUserType = 'WORKER'
-                                 AND w.workModuleSignatureType = 'ACCEPT'
-                        THEN DATE(CAST(w.createdAt AS TIMESTAMP)) END) AS scan_date,
-                    MIN(CASE WHEN wm.name = 'Peer Review'
-                                 AND w.workModuleUserType = 'REVIEWER'
-                                 AND w.workModuleSignatureType = 'ACCEPT'
-                        THEN DATE(CAST(w.createdAt AS TIMESTAMP)) END) AS peer_review_date
-                FROM {tbl('WorkModuleSignoff')} w
-                JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
-                JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
-                WHERE w.deleted = false
-                  AND wm.name IN ('Scan Assessment', 'Peer Review')
-                GROUP BY w.caseId
-            ),
-            case_pipeline_with_exit AS (
-                SELECT
-                    cp.caseId, cp.scan_date,
-                    CASE
-                        WHEN cp.peer_review_date IS NOT NULL AND s.ship_wrk_comp_date IS NOT NULL
-                            THEN LEAST(cp.peer_review_date, DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP)))
-                        WHEN cp.peer_review_date IS NOT NULL
-                            THEN cp.peer_review_date
-                        WHEN s.ship_wrk_comp_date IS NOT NULL
-                            THEN DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP))
-                        ELSE NULL
-                    END AS exit_date
-                FROM case_pipeline cp
-                LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON cp.caseId = s.caseId
-            ),
-            {signoff_cte()},
-            wip_at_snapshot AS (
-                SELECT cp.caseId
-                FROM case_pipeline_with_exit cp
-                JOIN {tbl('vw_fact_case')} f ON cp.caseId = f.id
-                LEFT JOIN signoff_dates sd ON cp.caseId = sd.caseId
-                WHERE f.deleted = false
-                  AND f.canceled = false
-                  AND f.onHold = false
-                  AND (LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')
-                  AND cp.scan_date IS NOT NULL
-                  AND cp.scan_date <= {snapshot_clause}
-                  AND (cp.exit_date IS NULL OR cp.exit_date > {snapshot_clause})
-                  -- Exclude cases currently sitting in Surgeon Approval (post-PSP-review, awaiting
-                  -- surgeon signoff) as of this snapshot date. Mirrors analytics_wip's surgeon_approval
-                  -- bucket's primary (timestamped) path — see report_wip_trend's periods query for notes.
-                  AND NOT (
-                        sd.first_psp_review_date IS NOT NULL AND sd.first_psp_review_date <= {snapshot_clause}
-                        AND (sd.surgeon_approval_date IS NULL OR sd.surgeon_approval_date > {snapshot_clause})
-                        AND COALESCE(sd.surgeon_last_action_reject, false) = false
-                        AND (sd.peer_review_date IS NULL OR sd.peer_review_date > {snapshot_clause})
-                  )
-                  {vw_prod_cond}
-            ),
-            {on_hold_cte()}
+            WITH {_wip_dp_ctes(snap_sql, vw_prod_cond)}
             SELECT {case_select_fields()}
             {case_joins()}
-            WHERE f.id IN (SELECT caseId FROM wip_at_snapshot)
+            WHERE f.id IN (SELECT caseId FROM wip_membership)
             ORDER BY f.createdAt DESC LIMIT 500
             """
             df = client.query(fetch_query).to_dataframe()
@@ -1076,91 +1121,16 @@ def report_wip_trend():
         trunc_expr = 'WEEK(MONDAY)' if granularity == 'weekly' else 'MONTH'
         period_add = 'INTERVAL 7 DAY' if granularity == 'weekly' else 'INTERVAL 1 MONTH'
         interval_unit = 'WEEK' if granularity == 'weekly' else 'MONTH'
-
+        periods_sql = f"""
+            SELECT DATE_TRUNC(d, {trunc_expr}) AS period_start,
+                   DATE_ADD(DATE_TRUNC(d, {trunc_expr}), {period_add}) AS period_end
+            FROM UNNEST(GENERATE_DATE_ARRAY(DATE('{date_from}'), DATE('{date_to}'), INTERVAL 1 {interval_unit})) AS d
+            GROUP BY 1, 2"""
         query = f"""
-        WITH
-        case_pipeline AS (
-            SELECT
-                w.caseId,
-                MIN(CASE WHEN wm.name = 'Scan Assessment'
-                             AND w.workModuleUserType = 'WORKER'
-                             AND w.workModuleSignatureType = 'ACCEPT'
-                    THEN DATE(CAST(w.createdAt AS TIMESTAMP)) END) AS scan_date,
-                MIN(CASE WHEN wm.name = 'Peer Review'
-                             AND w.workModuleUserType = 'REVIEWER'
-                             AND w.workModuleSignatureType = 'ACCEPT'
-                    THEN DATE(CAST(w.createdAt AS TIMESTAMP)) END) AS peer_review_date
-            FROM {tbl('WorkModuleSignoff')} w
-            JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
-            JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
-            WHERE w.deleted = false
-              AND wm.name IN ('Scan Assessment', 'Peer Review')
-            GROUP BY w.caseId
-        ),
-        -- Join ship_wrk_comp_date as an alternative exit signal (implicit-PSP rule).
-        -- A case exits digital production WIP when EITHER peer review OR ship completes.
-        -- This matches the effective_psp_date logic used across all other metrics.
-        case_pipeline_with_exit AS (
-            SELECT
-                cp.caseId,
-                cp.scan_date,
-                -- Exit = earliest of peer_review_date or ship_wrk_comp_date
-                CASE
-                    WHEN cp.peer_review_date IS NOT NULL AND s.ship_wrk_comp_date IS NOT NULL
-                        THEN LEAST(cp.peer_review_date, DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP)))
-                    WHEN cp.peer_review_date IS NOT NULL
-                        THEN cp.peer_review_date
-                    WHEN s.ship_wrk_comp_date IS NOT NULL
-                        THEN DATE(CAST(s.ship_wrk_comp_date AS TIMESTAMP))
-                    ELSE NULL
-                END AS exit_date
-            FROM case_pipeline cp
-            LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON cp.caseId = s.caseId
-        ),
-        -- Use vw_fact_case so we have phy_nameFirst/phy_nameLast for marketing filter.
-        -- Excludes: on-hold cases, marketing surgeon cases, deleted/cancelled.
-        -- Exit signal: LEAST(peer_review_date, ship_wrk_comp_date) — implicit-PSP rule.
-        {signoff_cte()},
-        valid_cases AS (
-            SELECT
-                cp.caseId, cp.scan_date, cp.exit_date,
-                sd.first_psp_review_date, sd.surgeon_approval_date, sd.peer_review_date,
-                COALESCE(sd.surgeon_last_action_reject, false) AS surgeon_last_action_reject
-            FROM case_pipeline_with_exit cp
-            JOIN {tbl('vw_fact_case')} f ON cp.caseId = f.id
-            LEFT JOIN signoff_dates sd ON cp.caseId = sd.caseId
-            WHERE f.deleted = false
-              AND f.canceled = false
-              AND f.onHold = false
-              AND (LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')
-              AND cp.scan_date IS NOT NULL
-              {vw_prod_cond}
-        ),
-        periods AS (
-            SELECT
-                DATE_TRUNC(d, {trunc_expr}) AS period_start,
-                DATE_ADD(DATE_TRUNC(d, {trunc_expr}), {period_add}) AS period_end
-            FROM UNNEST(
-                GENERATE_DATE_ARRAY(DATE('{date_from}'), DATE('{date_to}'), INTERVAL 1 {interval_unit})
-            ) AS d
-            GROUP BY 1, 2
-        )
-        SELECT
-            p.period_start AS period,
-            COUNT(DISTINCT CASE
-                WHEN vc.scan_date <= p.period_end
-                 AND (vc.exit_date IS NULL OR vc.exit_date > p.period_end)
-                 -- Exclude cases sitting in Surgeon Approval as of this period end: PSP-reviewed,
-                 -- not yet surgeon-approved, not sent back for rework, not yet at peer review.
-                 AND NOT (
-                       vc.first_psp_review_date IS NOT NULL AND vc.first_psp_review_date <= p.period_end
-                       AND (vc.surgeon_approval_date IS NULL OR vc.surgeon_approval_date > p.period_end)
-                       AND vc.surgeon_last_action_reject = false
-                       AND (vc.peer_review_date IS NULL OR vc.peer_review_date > p.period_end)
-                 )
-                THEN vc.caseId END) AS wip_count
+        WITH {_wip_dp_ctes(periods_sql, vw_prod_cond)}
+        SELECT p.period_start AS period, COUNT(DISTINCT m.caseId) AS wip_count
         FROM periods p
-        LEFT JOIN valid_cases vc ON TRUE
+        LEFT JOIN wip_membership m ON m.period_start = p.period_start
         GROUP BY p.period_start
         ORDER BY p.period_start ASC
         """
@@ -1220,6 +1190,9 @@ def report_process_counts():
 
         # Include cancelled cases — step completion is the milestone
         case_conds = ["f.deleted = false"]
+        _pc = psp_user_cond(args, 'f')
+        if _pc:
+            case_conds.append(_pc)
         if product:
             prods = [p.strip() for p in product.split(',')]
             joined = "','".join(prods)
@@ -1366,6 +1339,9 @@ def report_lt_by_step():
             return jsonify({"steps": []})
 
         case_conds = ["f.deleted = false", "f.canceled = false"]
+        _pc = psp_user_cond(args, 'f')
+        if _pc:
+            case_conds.append(_pc)
         if product:
             prods = [p.strip() for p in product.split(',')]
             joined = "','".join(prods)
@@ -1567,6 +1543,9 @@ def report_fpy_by_step():
             return jsonify({"steps": []})
 
         case_conds = ["f.deleted = false", "f.canceled = false"]
+        _pc = psp_user_cond(args, 'f')
+        if _pc:
+            case_conds.append(_pc)
         if product:
             prods = [p.strip() for p in product.split(',')]
             joined = "','".join(prods)
@@ -1755,6 +1734,9 @@ def report_cases_by_step():
             return jsonify({"cases": [], "count": 0, "step": step})
 
         case_conds = ["f.deleted = false", "f.canceled = false"]
+        _pc = psp_user_cond(args, 'f')
+        if _pc:
+            case_conds.append(_pc)
         if product:
             prods = [p.strip() for p in product.split(',')]
             joined = "','".join(prods)
@@ -1943,6 +1925,9 @@ def report_volume():
 
         # Include cancelled cases — PSP completion is the milestone; post-PSP cancellation should not affect volume
         case_conds = ["f.deleted = false"]
+        _pc = psp_user_cond(args, 'f')
+        if _pc:
+            case_conds.append(_pc)
         if product:
             prods = [p.strip() for p in product.split(',')]
             joined = "','".join(prods)
@@ -2032,12 +2017,17 @@ def report_otd():
 
     On Time: Digital Production LT <= OTD_TARGET_DAYS (default 14).
     Date filter applied to effective_psp_date.
+    NOTE: this is the LEGACY formula. Shoulder and ankle selections are answered by _otd_new_response()
+    (sum of step buckets excluding On Hold) before reaching it.
 
     Config: DataGenie_Report_Config.yaml -> otd
     """
     OTD_TARGET_DAYS = 14  # Config: DataGenie_Report_Config.yaml -> otd.target_days
     try:
         args = request.args
+        _cw, _sel = _ltg_case_where(args)
+        if len(set(_sel)) == 1 and _sel[0] in _LTG_PRODUCTS:
+            return _otd_new_response(args, _cw, _sel[0])      # NEW definition (see grouped lead-time section)
         date_from = args.get('date_from', '')
         date_to   = args.get('date_to', '')
         product   = args.get('product', '').strip()
@@ -2047,6 +2037,9 @@ def report_otd():
 
         # Include cancelled cases — PSP completion is the milestone; post-PSP cancellation should not affect OTD
         case_conds = ["f.deleted = false"]
+        _pc = psp_user_cond(args, 'f')
+        if _pc:
+            case_conds.append(_pc)
         if product:
             prods = [p.strip() for p in product.split(',')]
             joined = "','".join(prods)
@@ -2256,6 +2249,9 @@ def _qt_case_where(args):
             conds.append(f"cc.name IN ('{joined}')")
     else:
         conds.append("cc.name IN ('Reverse Total Shoulder Arthroplasty','Total Ankle Replacement')")
+    _pc = psp_user_cond(args, 'f')
+    if _pc:
+        conds.append(_pc)
     return " AND ".join(conds)
 
 def _qt_date_filter(args, ts_expr):
@@ -2569,24 +2565,30 @@ def analytics_wip():
         # Marketing exclusion — applies to Peer Review and Manufacturing WIP.
         # A case is a marketing case if 'marketing' appears anywhere in the surgeon name (case-insensitive).
         not_marketing = "(LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')"
+        # One predicate per tile, used by BOTH the counts and the case lists, and written so no case can sit in two tiles:
+        #   * a case past PSP review (or peer review / ship) can never be in Segmentation;
+        #   * Manufacturing-phase cases belong to Manufacturing only;
+        #   * a case sent back by the surgeon is PSP/Design (rework), never Peer Review;
+        #   * marketing-surgeon cases are excluded from every tile.
+        base_ok = "f.onHold = false AND f.canceled = false"
+        phase_dp = "f.phase NOT IN ('SHIPPING','SURGERY','MANUFACTURING')"
+        reject = "COALESCE(sd.surgeon_last_action_reject, false)"
         STEP_FILTERS = {
             'segmentation':
-                f"s.first_scan_upload_date IS NOT NULL AND sd.seg_review_date IS NULL AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')",
+                f"s.first_scan_upload_date IS NOT NULL AND sd.seg_review_date IS NULL AND NOT {past_psp} AND {base_ok} AND {phase_dp} AND {not_marketing}",
             'psp_design':
-                f"sd.seg_review_date IS NOT NULL AND NOT {past_psp} AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY') AND NOT {awaiting_surgeon_predicate}"
-                f" OR (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND sd.surgeon_last_action_reject = true AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY'))",
+                f"(sd.seg_review_date IS NOT NULL AND NOT {past_psp} AND {base_ok} AND {phase_dp} AND NOT {awaiting_surgeon_predicate} AND {not_marketing})"
+                f" OR (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND {reject} = true"
+                f" AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL AND {base_ok} AND {phase_dp} AND {not_marketing})",
             'surgeon_approval':
-                f"(sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND COALESCE(sd.surgeon_last_action_reject, false) = false AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')) OR (sd.seg_review_date IS NOT NULL AND NOT {past_psp} AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY') AND {awaiting_surgeon_predicate})",
+                f"(sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND {reject} = false"
+                f" AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL AND {base_ok} AND {phase_dp} AND {not_marketing})"
+                f" OR (sd.seg_review_date IS NOT NULL AND NOT {past_psp} AND {base_ok} AND {phase_dp} AND {awaiting_surgeon_predicate} AND {not_marketing})",
             'peer_review':
-                # Exclude: awaiting surgeon approval (already in surgeon bucket)
-                # Exclude: in MANUFACTURING phase (already in manufacturing bucket)
-                f"{past_psp} AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL"
-                f" AND f.onHold = false AND f.canceled = false"
-                f" AND f.phase NOT IN ('SHIPPING','SURGERY','MANUFACTURING')"
-                f" AND NOT (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND COALESCE(sd.surgeon_last_action_reject, false) = false)"
-                f" AND {not_marketing}",
+                f"{past_psp} AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL AND {base_ok} AND {phase_dp}"
+                f" AND NOT (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL) AND {not_marketing}",
             'manufacturing':
-                f"f.phase = 'MANUFACTURING' AND f.onHold = false AND f.canceled = false AND s.ship_wrk_comp_date IS NULL AND {not_marketing}",
+                f"f.phase = 'MANUFACTURING' AND {base_ok} AND s.ship_wrk_comp_date IS NULL AND {not_marketing}",
         }
         if fetch_step:
             step_filter = STEP_FILTERS.get(fetch_step, "1=1")
@@ -2599,41 +2601,11 @@ def analytics_wip():
             """
             df = client.query(query).to_dataframe()
             return jsonify({"cases": format_cases(df), "count": len(df), "step": fetch_step})
+        counts = ",\n            ".join(f"COUNTIF({pred}) AS {name}" for name, pred in STEP_FILTERS.items())
         query = f"""
         WITH {signoff_cte()}, {on_hold_cte()}, {dcp_done_cte}
         SELECT
-            COUNTIF(s.first_scan_upload_date IS NOT NULL AND sd.seg_review_date IS NULL
-                AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')) as segmentation,
-            COUNTIF(
-                (sd.seg_review_date IS NOT NULL
-                AND NOT (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
-                AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')
-                AND NOT {awaiting_surgeon_predicate})
-                OR
-                (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL
-                AND COALESCE(sd.surgeon_last_action_reject, false) = true
-                AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL
-                AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY'))
-            ) as psp_design,
-            COUNTIF(
-                (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL
-                    AND COALESCE(sd.surgeon_last_action_reject, false) = false
-                    AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL
-                    AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY'))
-                OR
-                (sd.seg_review_date IS NOT NULL
-                    AND NOT (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
-                    AND f.onHold = false AND f.canceled = false AND f.phase NOT IN ('SHIPPING','SURGERY')
-                    AND {awaiting_surgeon_predicate})
-            ) as surgeon_approval,
-            COUNTIF((sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
-                AND sd.peer_review_date IS NULL AND s.ship_wrk_comp_date IS NULL
-                AND f.onHold = false AND f.canceled = false
-                AND f.phase NOT IN ('SHIPPING','SURGERY','MANUFACTURING')
-                AND NOT (sd.first_psp_review_date IS NOT NULL AND sd.surgeon_approval_date IS NULL AND COALESCE(sd.surgeon_last_action_reject, false) = false)
-                AND (LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')) as peer_review,
-            COUNTIF(f.phase = 'MANUFACTURING' AND f.onHold = false AND f.canceled = false AND s.ship_wrk_comp_date IS NULL
-                AND (LOWER(COALESCE(f.phy_nameFirst,'') || ' ' || COALESCE(f.phy_nameLast,'')) NOT LIKE '%marketing%')) as manufacturing
+            {counts}
         {case_joins()}
         WHERE {where}
         """
@@ -3255,55 +3227,43 @@ def camstar_breakdown_fixation_proxy():
 
 
 # ══════════════════════════════════════════════════════════════
-#  LEAD TIME — GROUPED BREAKUP (shoulder only)
-#  /analytics/report/lt-grouped
+#  GROUPED LEAD TIME ENGINE (shoulder & ankle)
+#  + NEW ON-TIME DELIVERY  + SURGICAL PLAN USER OPTIONS
 #
-#  Why this exists: /analytics/report/lt-by-step chains each step to the
-#  previous step in a FIXED order and takes ABS() of the gap. For shoulder
-#  that is wrong in three ways (verified on September data, 103 cases):
-#    1. Design really finishes BEFORE Jigs Design in 99% of cases, but the
-#       configured order has Jigs first -> Design time lands in the Jigs bar
-#       and ABS() hides the negative gap on the Design bar.
-#    2. Waiting for the design call, Scan Exception and On Hold time all sit
-#       inside whichever step gap they happen to fall in.
-#    3. Each step is averaged over a different set of cases, so bars don't add up.
+#  /analytics/report/lt-grouped      grouped, non-overlapping lead-time breakup (+ per-case rows so the
+#                                    page can regroup by case type instantly, no extra query)
+#  /analytics/report/otd             On-Time Delivery. Shoulder/ankle use the NEW definition below;
+#                                    every other product keeps the legacy formula.
+#  /analytics/report/otd-trend       on-time % per month/week for the selected period + 3 months before
+#  /analytics/psp-users              reviewers who completed a surgical plan (for the new filter)
 #
-#  This endpoint instead takes ONE cohort (cases whose Peer Review ACCEPT falls
-#  in the date range) and cuts every case's timeline (case created -> last
-#  milestone) into non-overlapping segments. A moment in time is claimed by
-#  the first state that covers it:  On Hold  >  Scan Exception  >  Waiting on
-#  Design Call;  anything left belongs to the step whose gap it falls in.
-#  Every case therefore sums exactly to its elapsed time (checked, returned
-#  as checks.max_recon_error_days).
+#  How lead time is built: ONE cohort of completed cases; every case's timeline (case created -> last
+#  milestone) is cut into non-overlapping segments. A moment in time is claimed by the first state that
+#  covers it:  On Hold  >  Scan Exception  >  Waiting on Design Call;  anything left belongs to the step
+#  whose gap it falls in. Every case therefore sums exactly to its elapsed time (checks.max_recon_error_days).
 #
-#  Definitions (confirmed with the business):
-#    Waiting on Design Call = Design Call Prep REVIEWER ACCEPT -> call start
-#        (earliest non-cancelled DesignCall.startTime; falls back to the first
-#        r3idCaseDesignCallCompleted event). No wait if the call came first.
+#    Waiting on Design Call = Design Call Prep REVIEWER ACCEPT -> call start (shoulder); the moment the
+#        call was requested -> call start (ankle has no Design Call Prep step). Call start = earliest
+#        non-cancelled DesignCall.startTime (fallback: first r3idCaseDesignCallCompleted event).
 #    Scan Exception = r3idCaseScansException -> first Approved/Rejected/Canceled
-#    On Hold        = r3idCasePutOnHold -> r3idCaseRemovedFromOnHold (paired in
-#        order; unmatched events are ignored)
+#    On Hold        = r3idCasePutOnHold -> r3idCaseRemovedFromOnHold (paired in order)
 #
-#    Waiting on Design Call start: Design Call Prep accept when that step exists on >=50% of the
-#        cohort (shoulder); otherwise (ankle has no Design Call Prep step) the moment the call was
-#        requested - the latest r3idCaseDesignCallRequested at or before the call start.
-#
-#  Bars are the average for the cases a step applies to; group totals are the SUM OF THE STEP
-#  AVERAGES shown (so every number on the chart ties out). The true average case (creation -> last
-#  step) is returned separately as avg_case_days.
-#
-#  Only returns data when the selection is exactly ONE of the supported products (shoulder or
-#  ankle); everything else returns {"supported": false} and the page keeps using the existing
-#  lt-by-step chart.
-#  Ported from shoulder_lt_diagnostic.py (validated against real BigQuery data).
+#  NEW On-Time Delivery (shoulder & ankle): lead time = sum of every step bucket from Scan Exception through
+#  Documentation Transfer & Parts Request, leaving out ONLY On Hold (Surgeon Approval and Waiting on Design
+#  Call are included). On time = 14 days or less. Clock starts at case creation. A case counts in the period
+#  its last digital-production step (Peer Review / Doc Transfer / Parts Request) landed.
+#  Validated against real data with shoulder_lt_diagnostic.py (--otd-sim).
 # ══════════════════════════════════════════════════════════════
 import bisect as _ltg_bisect
+import threading as _ltg_threading
+import time as _ltg_time
 from collections import defaultdict as _ltg_dd
 from concurrent.futures import ThreadPoolExecutor as _ltg_pool
 
 _LTG_PRODUCTS = {'Reverse Total Shoulder Arthroplasty', 'Total Ankle Replacement'}
+OTD_NEW_TARGET_DAYS = 14
 
-# Steps in the order shoulder cases REALLY finish them (Design BEFORE Jigs Design).
+# Steps in the order shoulder/ankle cases REALLY finish them (Design BEFORE Jigs Design).
 _LTG_MS = [
     ("Scan Assessment", "scan"), ("Segmentation", "seg"), ("Input Collection", "input_collection"),
     ("Design Call Prep", "dcp"),
@@ -3355,6 +3315,40 @@ def _ltg_acc(step, utype=None):
     return f"MIN(IF({cond}, CAST(w.createdAt AS TIMESTAMP), NULL))"
 
 
+# ── Surgical Plan User (PSP reviewer) filter ─────────────────────────────────
+def _sql_lit(s):
+    """Escape a value for use inside a single-quoted BigQuery string literal."""
+    return str(s).replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _norm_name(s):
+    return re.sub(r"\s+", " ", str(s or "").strip()).lower()
+
+
+def psp_user_cond(args, alias='f'):
+    """SQL condition: the case's FINAL Proposed Surgical Plan REVIEWER ACCEPT was given by one of the
+    selected users (param psp_user, names separated by '|'). Empty string when the filter isn't set.
+    Each case counts under the person who completed the plan; cases with no plan sign-off yet have no
+    reviewer and are excluded while the filter is active."""
+    raw = (args.get('psp_user', '') or '').strip()
+    names = [_norm_name(n) for n in raw.split('|') if n.strip()]
+    if not names:
+        return ""
+    lst = "','".join(_sql_lit(n) for n in names)
+    return f"""{alias}.id IN (
+        SELECT caseId FROM (
+            SELECT w_psp.caseId,
+                   REGEXP_REPLACE(LOWER(TRIM(w_psp.signature)), r'\\s+', ' ') AS sig,
+                   ROW_NUMBER() OVER (PARTITION BY w_psp.caseId ORDER BY w_psp.createdAt DESC) AS rn
+            FROM {tbl('WorkModuleSignoff')} w_psp
+            JOIN {tbl('WorkModuleInstance')} wi_psp ON w_psp.workModuleInstanceId = wi_psp.id
+            JOIN {tbl('WorkModule')} wm_psp ON wi_psp.workModuleId = wm_psp.id
+            WHERE w_psp.deleted = false AND wm_psp.name = 'Proposed Surgical Plan'
+              AND w_psp.workModuleUserType = 'REVIEWER' AND w_psp.workModuleSignatureType = 'ACCEPT'
+        ) WHERE rn = 1 AND sig IN ('{lst}')
+    )"""
+
+
 def _ltg_case_where(args):
     """Same filter semantics as report_lt_by_step. Returns (where_sql, selected_product_names)."""
     product = args.get('product', '').strip()
@@ -3378,6 +3372,9 @@ def _ltg_case_where(args):
             conds.append(f"ct.name IN ('{joined}')")
     if surgeon:
         conds.append(f"LOWER(f.alias) LIKE LOWER('%{sanitize(surgeon)}%')")
+    pc = psp_user_cond(args, 'f')
+    if pc:
+        conds.append(pc)
     return " AND ".join(conds), selected
 
 
@@ -3390,6 +3387,7 @@ def _ltg_fetch(case_where):
         WHERE {case_where})"""
     cases_sql = f"""
         SELECT w.caseId AS caseId,
+          ANY_VALUE(ct.name) AS case_type,
           CAST(ANY_VALUE(f.createdAt) AS TIMESTAMP) AS created,
           {_ltg_acc('Scan Assessment', 'WORKER')}          AS scan,
           {_ltg_acc('Segmentation', 'REVIEWER')}           AS seg,
@@ -3553,33 +3551,39 @@ def _ltg_partition(created, items, states):
     return res, (last - created).total_seconds() / 86400.0
 
 
-def _ltg_compute(cases, hold_ev, events, calls, date_from, date_to, product=None):
-    """Pure function (no BigQuery) so it can be tested offline. Returns the JSON payload."""
+# ── cached per-case table ────────────────────────────────────────────────────
+_LTG_CACHE = {}
+_LTG_CACHE_LOCK = _ltg_threading.Lock()
+_LTG_CACHE_TTL = 300          # seconds; the page asks for lt-grouped, otd and otd-trend back to back
+
+
+def _ltg_build_table(cases, hold_ev, events, calls, product):
+    """One row per completed (Peer Review accepted) case: days in every bucket label, which labels the case
+    went through, its case type, and its end timestamps. Returns (table DataFrame, meta dict)."""
     df = cases.copy()
     if "input_collection" not in df.columns:
         df["input_collection"] = pd.NaT
+    if "case_type" not in df.columns:
+        df["case_type"] = ""
     for c in ["created", "scan", "seg", "input_collection", "dcp", "planning", "jigs", "design", "psp",
               "psp_approver", "peer", "doc_transfer", "parts_request"]:
         df[c] = pd.to_datetime(df[c], utc=True, errors="coerce")
+    df["case_type"] = df["case_type"].fillna("").astype(str)
     ev = None
     if events is not None and len(events):
         ev = events.copy()
         ev["ts"] = pd.to_datetime(ev["ts"], utc=True, errors="coerce")
 
-    cohort = df[df["peer"].notna()]
-    if date_from:
-        cohort = cohort[cohort["peer"] >= pd.Timestamp(date_from, tz="UTC")]
-    if date_to:
-        cohort = cohort[cohort["peer"] < pd.Timestamp(date_to, tz="UTC") + pd.Timedelta(days=1)]
-
+    done = df[df["peer"].notna()]
+    dcp_cov = float(done["dcp"].notna().mean()) if len(done) else 0.0
+    wait_col = "dcp" if dcp_cov >= 0.5 else "request"
     holds = _ltg_hold_intervals(hold_ev, pd.Timestamp.now(tz="UTC"))
     excs = _ltg_exception_intervals(ev)
-    dcp_cov = float(cohort["dcp"].notna().mean()) if len(cohort) else 0.0
-    wait_col = "dcp" if dcp_cov >= 0.5 else "request"
-    waits = _ltg_call_waits(cohort, calls, ev, start_col=wait_col)
+    waits = _ltg_call_waits(done, calls, ev, start_col=wait_col)
+    labels = [lab for _, _, _, labs in _ltg_buckets(product) for lab in labs]
 
-    per_case, present, max_err = {}, {}, 0.0
-    for _, r in cohort.iterrows():
+    recs, max_err = [], 0.0
+    for _, r in done.iterrows():
         cid = r["caseId"]
         items = sorted([(r[c], i, name) for i, (name, c) in enumerate(_LTG_MS) if pd.notna(r[c])],
                        key=lambda x: (x[0], x[1]))
@@ -3591,65 +3595,429 @@ def _ltg_compute(cases, hold_ev, events, calls, date_from, date_to, product=None
         merged = _ltg_dd(float)
         for k, v in res.items():
             merged[_LTG_MERGE.get(k, k)] += v
-        per_case[cid] = merged
-        present[cid] = {_LTG_MERGE.get(n, n) for _, _, n in items}
+        present = {_LTG_MERGE.get(n, n) for _, _, n in items}
         max_err = max(max_err, abs(sum(res.values()) - elapsed))
+        ends = [r[c] for c in ("peer", "doc_transfer", "parts_request") if pd.notna(r[c])]
+        rec = {"caseId": cid, "case_type": r["case_type"], "peer_ts": r["peer"], "end_ts": max(ends),
+               "elapsed": elapsed}
+        for lab in labels:
+            d = merged.get(lab, 0.0)
+            rec["d::" + lab] = d
+            rec["p::" + lab] = (d > 0) if lab in _LTG_STATES else (lab in present)
+        recs.append(rec)
+    table = pd.DataFrame(recs)
+    meta = {"labels": labels, "wait_col": wait_col, "max_err": max_err,
+            "wait_starts_at": "Design Call Prep accept" if wait_col == "dcp" else "when the call was requested",
+            "product": product}
+    return table, meta
 
-    n = len(per_case)
+
+def _ltg_cached_table(case_where, product, refresh=False):
+    key = (case_where, product)
+    now = _ltg_time.time()
+    with _LTG_CACHE_LOCK:
+        hit = _LTG_CACHE.get(key)
+        if hit and not refresh and now - hit[0] < _LTG_CACHE_TTL:
+            return hit[1]
+    cases, hold_ev, events, calls = _ltg_fetch(case_where)
+    built = _ltg_build_table(cases, hold_ev, events, calls, product)
+    with _LTG_CACHE_LOCK:
+        _LTG_CACHE[key] = (now, built)
+        for k in [k for k, v in _LTG_CACHE.items() if now - v[0] > _LTG_CACHE_TTL * 3]:
+            _LTG_CACHE.pop(k, None)
+    return built
+
+
+def _ltg_date_mask(series, date_from, date_to):
+    """Boolean mask for UTC-dated timestamps within [date_from, date_to] (inclusive, either may be empty)."""
+    m = series.notna()
+    if date_from:
+        m &= series >= pd.Timestamp(date_from, tz="UTC")
+    if date_to:
+        m &= series < pd.Timestamp(date_to, tz="UTC") + pd.Timedelta(days=1)
+    return m
+
+
+def _ltg_aggregate(table, meta, product, mask):
+    """Bucket / step statistics for the cases selected by `mask` (same shape the page renders).
+    Works on the same 3-decimal day values the page receives, with exact integer (milli-day) sums, so the
+    browser's regrouping by case type (ltgAggregate in report_generator.html) gives identical numbers."""
+    t = table[mask]
+    n = int(len(t))
     if n == 0:
-        return {"supported": True, "cohort_cases": 0, "buckets": [], "total_days": 0}
+        return {"supported": True, "cohort_cases": 0, "buckets": [], "total_days": 0, "avg_case_days": 0}
 
     def _r(v, d=1):
         return None if v is None or v != v else round(float(v), d)
 
-    out_buckets, total_all, avg_case = [], 0.0, 0.0
+    out_buckets, total_all, avg_case_milli = [], 0.0, 0
     for key, name, color, labels in _ltg_buckets(product):
         steps, btotal = [], 0.0
         for label in labels:
-            if label in _LTG_STATES:
-                vals = [pc[label] for pc in per_case.values() if pc.get(label, 0) > 0]
-            else:
-                vals = [per_case[c].get(label, 0.0) for c in per_case if label in present[c]]
-            if not vals:
+            if "d::" + label not in t.columns:
                 continue
-            s_ = pd.Series(vals, dtype=float)
-            contrib = sum(per_case[c].get(label, 0.0) for c in per_case) / n
-            avg_case += contrib
-            mean_r = round(float(s_.mean()), 1)
+            days3 = np.round(t["d::" + label].to_numpy(dtype=float), 3)
+            milli = np.rint(days3 * 1000).astype(np.int64)
+            present = t["p::" + label].to_numpy(dtype=bool)
+            if not present.any():
+                continue
+            vals = np.sort(days3[present])
+            cnt = int(present.sum())
+            avg_case_milli += int(milli.sum())
+            mean_r = round(float(milli[present].sum()) / (1000.0 * cnt), 1)
             btotal += mean_r          # group total = sum of the step averages exactly as displayed
-            steps.append({"step": label, "mean": mean_r, "median": _r(s_.median()),
-                          "p90": _r(s_.quantile(0.9)), "cases": int(len(s_)),
-                          "pct_cases": _r(100.0 * len(s_) / n, 0), "per_case": _r(contrib, 2)})
+            steps.append({"step": label, "mean": mean_r, "median": _r(np.quantile(vals, 0.5)),
+                          "p90": _r(np.quantile(vals, 0.9)), "cases": cnt,
+                          "pct_cases": _r(100.0 * cnt / n, 0), "per_case": _r(float(milli.sum()) / (1000.0 * n), 2)})
         if steps:
             out_buckets.append({"key": key, "name": name, "color": color, "total": round(btotal, 1), "steps": steps})
             total_all += btotal
     return {
         "supported": True,
-        "cohort_cases": int(n),
+        "cohort_cases": n,
         "total_days": round(total_all, 1),          # sum of step averages
-        "avg_case_days": round(avg_case, 1),        # true average case, creation -> last step
-        "wait_starts_at": "Design Call Prep accept" if wait_col == "dcp" else "when the call was requested",
+        "avg_case_days": round(avg_case_milli / (1000.0 * n), 1),   # true average case, creation -> last step
+        "wait_starts_at": meta["wait_starts_at"],
         "buckets": out_buckets,
-        "checks": {"max_recon_error_days": round(float(max_err), 6)},
+        "checks": {"max_recon_error_days": round(float(meta["max_err"]), 6)},
     }
+
+
+def _ltg_unsupported():
+    return jsonify({"supported": False,
+                    "reason": "Grouped breakup is only available when exactly one of these products is "
+                              f"selected: {', '.join(sorted(_LTG_PRODUCTS))}."})
 
 
 @app.route("/analytics/report/lt-grouped", methods=["GET"])
 def report_lt_grouped():
-    """Grouped, non-overlapping lead-time breakup for shoulder (see section header above)."""
+    """Grouped, non-overlapping lead-time breakup for shoulder and ankle (see section header above).
+    Also returns per-case rows so the page can regroup by case type without another request."""
     try:
         args = request.args
         case_where, selected = _ltg_case_where(args)
         if len(set(selected)) != 1 or selected[0] not in _LTG_PRODUCTS:
-            return jsonify({"supported": False,
-                            "reason": "Grouped breakup is only available when exactly one of these products is "
-                                      f"selected: {', '.join(sorted(_LTG_PRODUCTS))}."})
+            return _ltg_unsupported()
+        product = selected[0]
         date_from = validate_date(args.get('date_from', ''))
         date_to = validate_date(args.get('date_to', ''))
-        cases, hold_ev, events, calls = _ltg_fetch(case_where)
-        payload = _ltg_compute(cases, hold_ev, events, calls, date_from, date_to, product=selected[0])
+        table, meta = _ltg_cached_table(case_where, product, refresh=args.get('refresh') == 'true')
+        if len(table) == 0:
+            payload = _ltg_aggregate(table, meta, product, pd.Series([], dtype=bool))
+        else:
+            mask = _ltg_date_mask(table["peer_ts"], date_from, date_to)
+            payload = _ltg_aggregate(table, meta, product, mask)
+            sub = table[mask]
+            labels = meta["labels"]
+            ct_counts = sub["case_type"].replace("", "(no case type)").value_counts()
+            case_types = list(ct_counts.index)
+            ct_idx = {c: i for i, c in enumerate(case_types)}
+            rows = []
+            ct_series = sub["case_type"].replace("", "(no case type)")
+            dcols = [sub["d::" + lab].round(3).tolist() for lab in labels]
+            pcols = [sub["p::" + lab].astype(bool).tolist() for lab in labels]
+            for i in range(len(sub)):
+                mask_bits = 0
+                for j in range(len(labels)):
+                    if pcols[j][i]:
+                        mask_bits |= (1 << j)
+                rows.append([ct_idx[ct_series.iloc[i]], [dcols[j][i] for j in range(len(labels))], mask_bits])
+            payload.update({
+                "product": product,
+                "labels": labels,
+                "defs": [{"key": k, "name": n, "color": c, "labels": labs} for k, n, c, labs in _ltg_buckets(product)],
+                "case_types": case_types,
+                "rows": rows,
+            })
         payload["date_from"], payload["date_to"] = date_from, date_to
         return jsonify(payload)
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+
+# ── NEW On-Time Delivery (shoulder & ankle) ──────────────────────────────────
+def _otd_new_frame(table, date_from, date_to):
+    """Completed cases whose last digital-production step landed in range, with the new lead time
+    (every bucket except On Hold) and on-time flag."""
+    if len(table) == 0:
+        return table.assign(lt_otd=[], on_time=[])
+    sub = table[_ltg_date_mask(table["end_ts"], date_from, date_to)].copy()
+    dcols = [c for c in sub.columns if c.startswith("d::")]
+    sub["lt_otd"] = sub[dcols].sum(axis=1) - (sub["d::On Hold"] if "d::On Hold" in sub.columns else 0.0)
+    sub["on_time"] = sub["lt_otd"] <= OTD_NEW_TARGET_DAYS
+    return sub
+
+
+def _otd_new_response(args, case_where, product):
+    date_from = validate_date(args.get('date_from', ''))
+    date_to = validate_date(args.get('date_to', ''))
+    table, meta = _ltg_cached_table(case_where, product, refresh=args.get('refresh') == 'true')
+    sub = _otd_new_frame(table, date_from, date_to)
+    if args.get('fetch_cases') == 'true':
+        status = args.get('otd_status', '').strip()
+        if status == 'On Time':
+            sub = sub[sub["on_time"]]
+        elif status == 'Delayed':
+            sub = sub[~sub["on_time"]]
+        elif status == 'No Data':
+            sub = sub.iloc[0:0]
+        ids = sub.sort_values("end_ts", ascending=False)["caseId"].tolist()[:500]
+        if not ids:
+            return jsonify({"cases": [], "count": 0, "otd_status": status})
+        case_df = client.query(fetch_cases_by_ids_query(ids)).to_dataframe()
+        return jsonify({"cases": format_cases(case_df), "count": len(case_df), "otd_status": status})
+    on_time = int(sub["on_time"].sum()) if len(sub) else 0
+    delayed = int(len(sub)) - on_time
+    total = on_time + delayed
+    return jsonify({"on_time": on_time, "delayed": delayed, "no_data": 0, "total": total,
+                    "otd_pct": round(on_time / total * 100, 1) if total else 0,
+                    "target_days": OTD_NEW_TARGET_DAYS, "definition": "new",
+                    "definition_text": "Digital Production lead time = sum of every step from Scan Exception through "
+                                       "Documentation Transfer & Parts Request, leaving out On Hold only "
+                                       "(Surgeon Approval and Waiting on Design Call are included)."})
+
+
+def _otd_period_key(ts, granularity):
+    d = ts.tz_convert("UTC").tz_localize(None).normalize()
+    if granularity == 'weekly':
+        d = d - pd.Timedelta(days=int(d.weekday()))        # Monday
+        return d.strftime('%Y-%m-%d')
+    return d.strftime('%Y-%m')
+
+
+def _otd_trend_periods(win_from, win_to, granularity):
+    """All period keys from win_from to win_to (inclusive) so the line has no gaps."""
+    keys = []
+    if granularity == 'weekly':
+        d = win_from - pd.Timedelta(days=int(win_from.weekday()))
+        while d <= win_to:
+            keys.append(d.strftime('%Y-%m-%d'))
+            d += pd.Timedelta(days=7)
+    else:
+        d = win_from.replace(day=1)
+        while d <= win_to:
+            keys.append(d.strftime('%Y-%m'))
+            d = (d + pd.DateOffset(months=1)).replace(day=1)
+    return keys
+
+
+def _otd_period_label(key, granularity):
+    if granularity == 'weekly':
+        return 'Wk ' + pd.Timestamp(key).strftime('%m/%d')
+    return pd.Timestamp(key + '-01').strftime('%b %Y')
+
+
+def _otd_period_selected(key, granularity, sel_from, sel_to):
+    if granularity == 'weekly':
+        a = pd.Timestamp(key); b = a + pd.Timedelta(days=6)
+    else:
+        a = pd.Timestamp(key + '-01'); b = a + pd.DateOffset(months=1) - pd.Timedelta(days=1)
+    return bool(a <= sel_to and b >= sel_from)
+
+
+@app.route("/analytics/report/otd-trend", methods=["GET"])
+def report_otd_trend():
+    """On-time % per month (or week) for the selected period AND the 3 months before it.
+    Shoulder/ankle use the new definition; other products use the legacy formula."""
+    try:
+        args = request.args
+        granularity = 'weekly' if args.get('granularity') == 'weekly' else 'monthly'
+        today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+        date_from = validate_date(args.get('date_from', ''))
+        date_to = validate_date(args.get('date_to', ''))
+        if date_to:
+            sel_to = pd.Timestamp(date_to)
+        else:
+            sel_to = today
+        if date_from:
+            sel_from = pd.Timestamp(date_from)
+        else:
+            sel_from = (sel_to - pd.DateOffset(months=5)).replace(day=1)       # no range chosen: last 6 months
+        win_from = sel_from - pd.DateOffset(months=3)                          # selected period + 3 months before
+        win_from_s, win_to_s = win_from.strftime('%Y-%m-%d'), sel_to.strftime('%Y-%m-%d')
+        keys = _otd_trend_periods(win_from, sel_to, granularity)
+        counts = {k: [0, 0] for k in keys}          # key -> [on_time, delayed]
+
+        case_where, selected = _ltg_case_where(args)
+        definition = "legacy"
+        if len(set(selected)) == 1 and selected[0] in _LTG_PRODUCTS:
+            definition = "new"
+            table, meta = _ltg_cached_table(case_where, selected[0], refresh=args.get('refresh') == 'true')
+            sub = _otd_new_frame(table, win_from_s, win_to_s)
+            for rec in sub[["end_ts", "on_time"]].itertuples(index=False):
+                k = _otd_period_key(rec.end_ts, granularity)
+                if k in counts:
+                    counts[k][0 if rec.on_time else 1] += 1
+        else:
+            OTD_TARGET_DAYS = 14
+            case_conds = ["f.deleted = false"]
+            product = args.get('product', '').strip()
+            product_group = args.get('product_group', '').strip()
+            case_type = args.get('case_type', '').strip()
+            surgeon = args.get('surgeon', '').strip()
+            if product:
+                prods = [sanitize(p) for p in product.split(',') if p.strip()]
+                case_conds.append("cc.name IN ('" + "','".join(prods) + "')")
+            elif product_group:
+                all_prods = []
+                for g in [g.strip() for g in product_group.split(',')]:
+                    all_prods.extend(PRODUCT_GROUPS.get(g, []))
+                if all_prods:
+                    case_conds.append("cc.name IN ('" + "','".join(all_prods) + "')")
+            if case_type:
+                types = [sanitize(t) for t in case_type.split(',') if t.strip()]
+                case_conds.append("ct.name IN ('" + "','".join(types) + "')")
+            if surgeon:
+                case_conds.append(f"LOWER(f.alias) LIKE LOWER('%{sanitize(surgeon)}%')")
+            pc = psp_user_cond(args, 'f')
+            if pc:
+                case_conds.append(pc)
+            legacy_where = " AND ".join(case_conds)
+            trunc = "WEEK(MONDAY)" if granularity == 'weekly' else "MONTH"
+            query = f"""
+            WITH {signoff_cte()},
+                 {on_hold_cte()},
+            case_dates AS (
+                SELECT
+                    f.id AS caseId,
+                    s.first_scan_upload_date,
+                    s.ship_wrk_comp_date,
+                    sd.first_psp_review_date,
+                    sd.surgeon_approval_date,
+                    sd.peer_review_date,
+                    DATE(LEAST(
+                        COALESCE(sd.first_psp_review_date, DATETIME '9999-12-31'),
+                        COALESCE(sd.peer_review_date,      DATETIME '9999-12-31'),
+                        COALESCE(CAST(s.ship_wrk_comp_date AS DATETIME), DATETIME '9999-12-31')
+                    )) AS effective_psp_date,
+                    COALESCE(oh.total_hold_days, 0) AS hold_days
+                FROM {tbl('Case')} f
+                JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+                LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
+                LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON f.id = s.caseId
+                LEFT JOIN signoff_dates sd ON f.id = sd.caseId
+                LEFT JOIN on_hold_time oh ON f.id = oh.caseId
+                WHERE {legacy_where}
+                  AND (sd.first_psp_review_date IS NOT NULL
+                       OR sd.peer_review_date   IS NOT NULL
+                       OR s.ship_wrk_comp_date  IS NOT NULL)
+            ),
+            pop AS (
+                SELECT * FROM case_dates
+                WHERE first_scan_upload_date IS NOT NULL
+                  AND effective_psp_date >= '{win_from_s}' AND effective_psp_date <= '{win_to_s}'
+            ),
+            lt_calc AS (
+                SELECT
+                    caseId,
+                    effective_psp_date,
+                    CASE
+                        WHEN first_psp_review_date IS NOT NULL AND first_scan_upload_date IS NOT NULL THEN
+                            GREATEST(0,
+                                TIMESTAMP_DIFF(CAST(first_psp_review_date AS DATETIME), first_scan_upload_date, DAY)
+                                - hold_days
+                                - GREATEST(0, COALESCE(
+                                    TIMESTAMP_DIFF(surgeon_approval_date, first_psp_review_date, DAY), 0)))
+                        ELSE NULL
+                    END AS digital_lt
+                FROM pop
+            )
+            SELECT
+                DATE_TRUNC(effective_psp_date, {trunc}) AS period,
+                CASE WHEN digital_lt IS NULL OR digital_lt <= {OTD_TARGET_DAYS} THEN 'ON_TIME' ELSE 'DELAYED' END AS otd_status,
+                COUNT(DISTINCT caseId) AS case_count
+            FROM lt_calc
+            GROUP BY period, otd_status
+            """
+            df = client.query(query).to_dataframe()
+            for rec in df.itertuples(index=False):
+                k = pd.Timestamp(rec.period).strftime('%Y-%m-%d' if granularity == 'weekly' else '%Y-%m')
+                if k in counts:
+                    counts[k][0 if rec.otd_status == 'ON_TIME' else 1] += int(rec.case_count)
+
+        points = []
+        for k in keys:
+            on, de = counts[k]
+            tot = on + de
+            points.append({"period": k, "label": _otd_period_label(k, granularity), "on_time": on, "delayed": de,
+                           "total": tot, "pct": round(on / tot * 100, 1) if tot else None,
+                           "selected": _otd_period_selected(k, granularity, sel_from, sel_to)})
+        return jsonify({"granularity": granularity, "definition": definition, "target_days": 14, "points": points,
+                        "selected_from": sel_from.strftime('%Y-%m-%d'), "selected_to": sel_to.strftime('%Y-%m-%d')})
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+
+# ── Surgical Plan User options ───────────────────────────────────────────────
+_NOT_INDIA_TEAMS = {"excluded", "others", "other", "nan", ""}
+
+
+@app.route("/analytics/psp-users", methods=["GET"])
+def psp_users():
+    """Reviewers who completed a surgical plan (their sign-off is the FINAL Proposed Surgical Plan reviewer
+    accept on the case), within the current date range / product / case types, sorted by cases completed.
+    Each name carries its team from the Accounts sheet: a BigQuery-system user with a team is India;
+    anyone not listed (or listed as excluded) is 'USA / not listed'."""
+    try:
+        args = request.args
+        date_from = validate_date(args.get('date_from', ''))
+        date_to = validate_date(args.get('date_to', ''))
+        # the reviewer filter itself must not narrow its own option list
+        no_psp = {k: v for k, v in args.items() if k != 'psp_user'}
+        where, _sel = _ltg_case_where(no_psp)
+        where = where.replace("f.canceled = false", "1=1")
+        date_sql = ""
+        if date_from:
+            date_sql += f" AND fr.d >= '{date_from}'"
+        if date_to:
+            date_sql += f" AND fr.d <= '{date_to}'"
+        query = f"""
+        WITH final_rev AS (
+            SELECT w.caseId, w.signature, DATE(CAST(w.createdAt AS TIMESTAMP)) AS d,
+                   ROW_NUMBER() OVER (PARTITION BY w.caseId ORDER BY w.createdAt DESC) AS rn
+            FROM {tbl('WorkModuleSignoff')} w
+            JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
+            JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
+            WHERE w.deleted = false AND wm.name = 'Proposed Surgical Plan'
+              AND w.workModuleUserType = 'REVIEWER' AND w.workModuleSignatureType = 'ACCEPT'
+              AND w.signature IS NOT NULL AND TRIM(w.signature) != ''
+        )
+        SELECT fr.signature AS name, COUNT(DISTINCT fr.caseId) AS cases
+        FROM final_rev fr
+        JOIN {tbl('Case')} f ON fr.caseId = f.id
+        JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+        LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
+        WHERE fr.rn = 1 AND {where}{date_sql}
+        GROUP BY fr.signature
+        """
+        df = client.query(query).to_dataframe()
+        groups = get_user_groups().get("bigquery", {}) or {}
+        team_of = {}
+        for team, names in groups.items():
+            if str(team).strip().lower() in _NOT_INDIA_TEAMS:
+                continue
+            for nm in names:
+                team_of[_norm_name(nm)] = str(team).strip()
+        merged = {}
+        for rec in df.itertuples(index=False):
+            key = _norm_name(rec.name)
+            cur = merged.setdefault(key, {"name": str(rec.name).strip(), "cases": 0, "_best": 0})
+            cur["cases"] += int(rec.cases)
+            if int(rec.cases) > cur["_best"]:
+                cur["name"], cur["_best"] = str(rec.name).strip(), int(rec.cases)
+        users = []
+        for key, u in merged.items():
+            users.append({"name": u["name"], "cases": u["cases"], "team": team_of.get(key)})
+        users.sort(key=lambda u: (-u["cases"], u["name"].lower()))
+        teams = {}
+        for u in users:
+            if u["team"]:
+                teams[u["team"]] = teams.get(u["team"], 0) + 1
+        return jsonify({"users": users,
+                        "teams": [{"team": t, "reviewers": n} for t, n in sorted(teams.items(), key=lambda kv: (-kv[1], kv[0]))],
+                        "india_reviewers": sum(1 for u in users if u["team"]),
+                        "other_reviewers": sum(1 for u in users if not u["team"]),
+                        "teams_available": bool(team_of)})
     except Exception as e:
         return handle_error(request.endpoint, e)
 
