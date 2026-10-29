@@ -495,6 +495,18 @@
 .vol-prev{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3);cursor:pointer;user-select:none}
 .vol-prev input{accent-color:var(--accent-dark)}
 .vol-prev.disabled{opacity:.45;cursor:not-allowed}
+.ltg-readout{margin:0 0 5px}
+.ltg-ro-h{font-size:11px;font-weight:700;color:#374151;margin-bottom:3px}.ltg-ro-h span{font-weight:400;color:#6b7280;margin-left:6px;font-size:10px}
+.ltg-ro-chips{display:flex;flex-wrap:wrap}
+.ltg-chip{display:inline-flex;align-items:baseline;gap:5px;border:1px solid var(--border-dark);border-radius:10px;padding:1px 8px;font-size:10.5px;margin:0 6px 4px 0;background:#fff}
+.ltg-chip b{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:#374151}
+.ltg-chip em{font-style:normal;font-weight:800;color:var(--accent-dark)}
+.ltg-chip i{font-style:normal;color:#6b7280;font-size:9.5px}
+.ltg-chip.all{background:#e6f4f7;border-color:var(--accent)}
+.ltg-chip.off{opacity:.38}
+#rptCard_dplt{display:flex;flex-direction:column;height:360px;box-sizing:border-box;overflow:hidden;margin-bottom:14px}
+#rptCard_dplt .rpt-chart-wrap{flex:1 1 auto;min-height:0;height:auto;position:relative}
+#rptCard_dplt .logic-caption{font-size:9px;line-height:1.35;margin-top:4px}
 </style>
 </head>
 <body>
@@ -723,7 +735,7 @@
           <div class="ms-wrap" id="rptPspWrap">
             <div class="ms-label">Surgical Plan User</div>
             <button class="ms-btn" onclick="rptPspOpen()"><span class="ms-btn-text" id="lbl-rptPspUser">All reviewers</span><span class="ms-btn-icons"><i class="fa fa-times ms-clear-x" id="clr-rptPspUser" onclick="clearDD('rptPspUser',event)"></i><i class="fa fa-chevron-down ms-chevron"></i></span></button>
-            <div class="ms-dropdown" id="dd-rptPspUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptPspUser',this.value)"/></div><div class="psp-quick" id="pspQuick" style="display:none"></div><div class="psp-sorted">Sorted by cases completed, highest first</div><div class="ms-list" id="list-rptPspUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Open to load reviewers</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptPspUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptPspUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptPspUser')">All</button></div></div></div>
+            <div class="ms-dropdown" id="dd-rptPspUser"><div class="ms-search"><input placeholder="Search..." oninput="filterList('rptPspUser',this.value)"/></div><div class="psp-quick" id="pspQuick" style="display:none"></div><div class="psp-sorted">Sorted by cases signed off, highest first</div><div class="ms-list" id="list-rptPspUser"><div style="padding:10px;color:var(--text-4);font-size:11px">Open to load reviewers</div></div><div class="ms-footer"><span class="ms-count" id="cnt-rptPspUser">0 selected</span><div class="ms-footer-btns"><button class="ms-clearall" onclick="clearDD('rptPspUser',event)">Clear</button><button class="ms-selectall" onclick="selectAll('rptPspUser')">All</button></div></div></div>
           </div>
           <!-- Granularity -->
           <div class="ms-wrap">
@@ -791,6 +803,7 @@
             <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptLtChart" checked onchange="rptSyncChartVisibility()"> <span>Lead Time by Step</span></label>
             <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptFpyChart" checked onchange="rptSyncChartVisibility()"> <span>FPY by Step</span></label>
             <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptOtdChart" checked onchange="rptSyncChartVisibility()"> <span>On-Time Delivery</span></label>
+            <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptDpLtChart" checked onchange="rptSyncChartVisibility()"> <span>DP Lead Time Trend</span></label>
           </div>
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-4);margin-bottom:5px">Optional Charts</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:10px">
@@ -1021,6 +1034,18 @@
             </div>
             </div>
           </div><!-- /rpt-cols -->
+
+          <div class="rpt-chart-card" id="rptCard_dplt" style="position:relative">
+            <button class="copy-btn" id="rcs_cpbtn_rptDpLtChart" onclick="copyRptCardEl(this,'Digital Production Lead Time Trend','rptCard_dplt')"><i class="fa fa-copy"></i> Copy</button>
+            <div class="rpt-chart-title"><i class="fa fa-stopwatch"></i> Digital Production Lead Time Trend <span style="font-weight:400;font-size:11px;color:var(--text-4)">average calendar days, On Hold left out</span></div>
+            <div id="rptDpLtToggles" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+              <button class="chart-toggle" id="rptDpLtWeeklyBtn" onclick="setRptDpLtGran('weekly')">Weekly</button>
+              <button class="chart-toggle active" id="rptDpLtMonthlyBtn" onclick="setRptDpLtGran('monthly')">Monthly</button>
+              <label class="vol-prev" id="rptDpLtPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="rptDpLtPrevChk" checked onchange="setRptDpLtPrev(this.checked)"/> Show previous 3 months</label>
+            </div>
+            <div class="rpt-chart-wrap"><canvas id="rptDpLtChart"></canvas></div>
+            <div class="logic-caption" id="rptDpLtCaption">Average Digital Production lead time per period, overall and for each case type in the main filter. The shaded band is the 3 months before the selected period.</div>
+          </div>
 
 
           <!-- ── Optional: Process Efficiency + Exclusion Breakdown ── -->
@@ -4538,8 +4563,8 @@ function renderRptQtChart(data){
 }
 
 function destroyRptCharts(){
-  [rptVolInst,rptWipInst,rptProcessInst,rptLtInst,rptFpyInst,rptOtdInst,rptOtdTrendInst,rptProcEffInst,rptExclInst,rptQtInst].forEach(c=>{if(c){try{c.destroy();}catch(e){}}});
-  rptVolInst=rptWipInst=rptProcessInst=rptLtInst=rptFpyInst=rptOtdInst=rptOtdTrendInst=rptProcEffInst=rptExclInst=rptQtInst=null; rptVolNest=null;
+  [rptVolInst,rptWipInst,rptProcessInst,rptLtInst,rptFpyInst,rptOtdInst,rptOtdTrendInst,rptDpLtInst,rptProcEffInst,rptExclInst,rptQtInst].forEach(c=>{if(c){try{c.destroy();}catch(e){}}});
+  rptVolInst=rptWipInst=rptProcessInst=rptLtInst=rptFpyInst=rptOtdInst=rptOtdTrendInst=rptDpLtInst=rptProcEffInst=rptExclInst=rptQtInst=null; rptVolNest=null;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -4624,11 +4649,21 @@ function ltgToggleType(i,checked){
   ltgSyncDd(); ltgRefresh();
 }
 function ltgSelectAll(){ ltgPayload.case_types.forEach((_,i)=>ltgSel.add(i)); ltgSyncDd(); ltgRefresh(); }
+// Digital production lead time per case: every step from Scan Exception through Documentation Transfer & Parts Request,
+// On Hold left out (the same definition as On-Time Delivery). One figure for all case types and one per case type.
+function ltgDpLt(){
+  const p=ltgPayload; if(!p||!p.rows||!p.rows.length)return null;
+  const k=p.labels.indexOf('On Hold');
+  const lt=r=>{let t=0;for(let i=0;i<r[1].length;i++)t+=r[1][i];return t-(k>=0?r[1][k]:0);};
+  const stat=arr=>{if(!arr.length)return{n:0,mean:null,median:null};const a=[...arr].sort((x,y)=>x-y);return{n:a.length,mean:ltgRound(a.reduce((x,y)=>x+y,0)/a.length,1),median:ltgRound(ltgQuantile(a,0.5),1)};};
+  return{overall:stat(p.rows.map(lt)),types:p.case_types.map((nm,i)=>({name:nm,idx:i,...stat(p.rows.filter(r=>r[0]===i).map(lt))}))};
+}
 function ltgRefresh(){
   if(!ltgPayload)return;
   const agg=ltgAggregate(ltgPayload,ltgSel);
   const names=ltgPayload.case_types.filter((_,i)=>ltgSel.has(i));
-  renderRptLtGrouped(agg,{caseTypes:names,totalTypes:ltgPayload.case_types.length});
+  if(ltgPayload._ro===undefined)ltgPayload._ro=ltgDpLt();
+  renderRptLtGrouped(agg,{caseTypes:names,totalTypes:ltgPayload.case_types.length,readout:ltgPayload._ro,ticked:ltgSel});
 }
 document.addEventListener('click',e=>{const dd=document.getElementById('ltgDd');if(dd&&!dd.contains(e.target))document.getElementById('ltgDdPanel')?.classList.remove('open');});
 
@@ -4648,19 +4683,29 @@ async function loadRptPspUsers(force){
   const list=document.getElementById('list-rptPspUser'); if(!list)return;
   const key=rptPspOptionsQS();
   if(!force&&rptPspData&&key===rptPspKey){renderRptPspList();return;}
-  list.innerHTML='<div style="padding:10px;color:var(--text-4);font-size:11px">Loading reviewers...</div>';
+  if(rptPspData)renderRptPspList();                         // show what we already have while the list refreshes
+  else list.innerHTML='<div style="padding:10px;color:var(--text-4);font-size:11px">Loading reviewers...</div>';
+  let timer=null;
   try{
-    const res=await fetch(`${API}/analytics/psp-users?${key}`);
+    const ctl=new AbortController(); timer=setTimeout(()=>ctl.abort(),45000);
+    const res=await fetch(`${API}/analytics/psp-users?${key}`,{signal:ctl.signal});
     const data=res.ok?await res.json():null;
-    if(!data||!data.users)throw new Error('bad response');
+    if(!data||!Array.isArray(data.users))throw new Error('bad response');
+    if(data.error&&!data.users.length)throw new Error(data.error);
     rptPspData=data; rptPspKey=key;
-    // drop selected reviewers that are not in the current selection any more
+    // drop selected reviewers that are not in the current selection any more (only after a successful load)
     const present=new Set(data.users.map(u=>u.name.toLowerCase()));
     const kept=SEL.rptPspUser.filter(n=>present.has(n.toLowerCase()));
     if(kept.length!==SEL.rptPspUser.length){SEL.rptPspUser=kept;updateLabel('rptPspUser');updateCount('rptPspUser');updateClearBtn('rptPspUser');}
     renderRptPspList();
-  }catch(e){list.innerHTML='<div style="padding:10px;color:var(--text-4);font-size:11px">Error loading reviewers</div>';}
+  }catch(e){
+    if(!rptPspData){
+      const msg=(e&&e.name==='AbortError')?'it took too long':((e&&e.message)||'unknown error');
+      list.innerHTML=`<div style="padding:10px;font-size:11px;color:var(--text-3)">Could not load reviewers (${rptPspEsc(msg)}). <a href="#" onclick="loadRptPspUsers(true);return false">Retry</a></div>`;
+    }
+  }finally{ if(timer)clearTimeout(timer); }
 }
+window.addEventListener('load',()=>setTimeout(()=>{loadRptPspUsers(false);},1500));   // warm the list so it is ready when the dropdown opens
 function rptPspOpen(){
   toggleDD('rptPspUser');
   if(document.getElementById('dd-rptPspUser')?.classList.contains('open'))loadRptPspUsers(false);
@@ -4694,7 +4739,7 @@ function rptPspUpdateNotice(){
   const box=document.getElementById('rptPspNotice'), txt=document.getElementById('rptPspNoticeTxt'); if(!box)return;
   const n=SEL.rptPspUser?.length||0;
   box.style.display=n?'block':'none';
-  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): only cases whose surgical plan was completed by them are shown. In-progress cases with no plan reviewer yet are left out.`;
+  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): only cases where they signed off the surgical plan are shown. Cases nobody has signed off yet are left out.`;
 }
 async function rptPspPrune(){ if(SEL.rptPspUser?.length)await loadRptPspUsers(true); }
 
@@ -4837,6 +4882,58 @@ function rptVolRenderLegend(){
   else{el.style.display='none';el.innerHTML='';}
 }
 
+
+// ══════════════════════════════════════════════════════════════
+//  DIGITAL PRODUCTION LEAD TIME TREND: weekly / monthly, overall + per case type, selected period + 3 months before.
+//  The page gets BOTH granularities and the previous months in one request, so the toggles only redraw.
+// ══════════════════════════════════════════════════════════════
+let rptDpLtInst=null, rptDpLtRaw=null, rptDpLtGran='monthly', rptDpLtShowPrev=true, rptDpLtPriorFlags=null;
+function rptDpLtSyncToggles(){
+  document.getElementById('rptDpLtWeeklyBtn')?.classList.toggle('active',rptDpLtGran==='weekly');
+  document.getElementById('rptDpLtMonthlyBtn')?.classList.toggle('active',rptDpLtGran==='monthly');
+}
+function setRptDpLtGran(g){ rptDpLtGran=g; rptDpLtSyncToggles(); if(rptDpLtRaw)renderRptDpLtChart(); }
+function setRptDpLtPrev(c){ rptDpLtShowPrev=!!c; if(rptDpLtRaw)renderRptDpLtChart(); }
+const rptDpLtBand={
+  id:'rptDpLtBand',
+  beforeDatasetsDraw(chart){
+    const fl=rptDpLtPriorFlags; if(!fl||chart!==rptDpLtInst||!fl.some(Boolean))return;
+    const {ctx,chartArea:a,scales:{x}}=chart, n=fl.length;
+    const step=n>1?(x.getPixelForValue(1)-x.getPixelForValue(0)):a.width;
+    const first=fl.indexOf(true), last=fl.lastIndexOf(true);
+    const x0=x.getPixelForValue(first)-step/2, x1=x.getPixelForValue(last)+step/2;
+    ctx.save(); ctx.fillStyle='rgba(148,163,184,0.14)'; ctx.fillRect(x0,a.top,x1-x0,a.bottom-a.top);
+    ctx.fillStyle='#64748b'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('PREVIOUS 3 MONTHS',(x0+x1)/2,a.top+10); ctx.restore();
+  }
+};
+Chart.register(rptDpLtBand);
+function renderRptDpLtChart(){
+  if(rptDpLtInst){try{rptDpLtInst.destroy();}catch(e){} rptDpLtInst=null;}
+  const canvas=document.getElementById('rptDpLtChart'); const d=rptDpLtRaw; if(!canvas||!d)return;
+  let pts=d[rptDpLtGran]||[];
+  if(!rptDpLtShowPrev)pts=pts.filter(p=>p.selected);
+  rptDpLtPriorFlags=pts.map(p=>!p.selected); if(!rptDpLtPriorFlags.some(Boolean))rptDpLtPriorFlags=null;
+  const labels=pts.map(p=>p.label), names=d.case_types||[], multi=names.length>1;
+  const cap=document.getElementById('rptDpLtCaption');
+  if(cap){
+    const per=rptDpLtGran==='weekly'?'week':'month';
+    cap.textContent=!pts.some(p=>p.overall)?'No completed cases for this selection and period.'
+      :(d.definition==='new'
+        ?`Average Digital Production lead time per ${per}, for cases whose last digital production step landed in that ${per}: every step from Scan Exception through Documentation Transfer & Parts Request, On Hold left out (Surgeon Approval and Waiting on Design Call included). One line per case type in the main filter; the shaded band is the 3 months before the selected period.`
+        :`Average legacy digital lead time per ${per} (scan upload to PSP reviewer accept, less hold days and surgeon wait; cases without a PSP accept are skipped). One line per case type in the main filter; the shaded band is the 3 months before the selected period.`);
+  }
+  const ds=[{label:'All case types',data:pts.map(p=>p.overall?p.overall.mean:null),borderColor:'#005F72',backgroundColor:'#005F72',borderWidth:3,tension:0.2,spanGaps:true,
+    pointRadius:pts.map(p=>p.selected?5:3),pointBackgroundColor:'#005F72',pointBorderColor:'#fff',pointBorderWidth:1.5,order:1,
+    datalabels:{display:c=>c.dataset.data[c.dataIndex]!=null,anchor:'end',align:'top',offset:4,color:'#1f2933',font:{size:10,weight:'700'},formatter:v=>v==null?'':v.toFixed(1)}}];
+  if(multi)names.forEach((nm,i)=>{const col=RPT_TYPE_PALETTE[i%RPT_TYPE_PALETTE.length];
+    ds.push({label:rptVolTypeName(nm),data:pts.map(p=>p.types[i]?p.types[i].mean:null),borderColor:col,backgroundColor:col,borderWidth:1.8,tension:0.2,spanGaps:true,pointRadius:2.5,order:2,datalabels:{display:false},_ti:i});});
+  rptDpLtInst=new Chart(canvas.getContext('2d'),{type:'line',data:{labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20,right:10}},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:multi,position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label:c=>{const p=pts[c.dataIndex];const st=c.dataset._ti!==undefined?p.types[c.dataset._ti]:p.overall;return st?`${c.dataset.label}: ${st.mean}d (median ${st.median}, n=${st.n})`:`${c.dataset.label}: no cases`;}}}},
+      scales:{y:{min:0,title:{display:true,text:'Calendar days',font:{size:10}},ticks:{font:{size:10}},grid:{color:'#e5e7eb'}},x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true},grid:{display:false}}}}});
+}
+
 // ══════════════════════════════════════════════════════════════
 //  ON-TIME DELIVERY: definition text + trend (selected period and the 3 months before it)
 // ══════════════════════════════════════════════════════════════
@@ -4913,7 +5010,13 @@ function renderRptLtGrouped(g,opts){
   if(opts.caseTypes&&opts.caseTypes.length){const names=(opts.caseTypes.length===opts.totalTypes&&opts.totalTypes>3)?`All case types (${opts.totalTypes})`:opts.caseTypes.join('; ');h+=`<div class="ltg-ctypes"><b>Case types:</b> ${esc(names)}</div>`;}
   h+=`<div class="ltg-total">${n} cases completed through Peer Review · sum of step averages ${f1(g.total_days)} days</div>`;
   h+=`<div class="ltg-sub">The average case takes ${f1(g.avg_case_days)} days from creation to its last step. Waiting on design call, scan exception and on hold apply to only some cases, so the sum of step averages is larger.</div>`;
-  h+='<div class="ltg-legend">'+buckets.map(b=>`<span><i style="background:${b.color}"></i>${esc(b.name)} · <b>${f1(b.total)}d</b></span>`).join('')+'</div>';
+  if(opts.readout&&opts.readout.overall){
+    const ro=opts.readout, tk=opts.ticked;
+    const chip=(name,st,cls,title)=>`<span class="ltg-chip ${cls}" title="${esc(title)}"><b>${esc(name)}</b><em>${f1(st.mean)}d</em><i>n=${st.n}</i></span>`;
+    let c=chip('All case types',ro.overall,'all',`Average ${f1(ro.overall.mean)} days · median ${f1(ro.overall.median)} · ${ro.overall.n} cases`);
+    ro.types.forEach(t=>{if(t.n)c+=chip(t.name,t,(tk&&!tk.has(t.idx))?'off':'',`${t.name}: average ${f1(t.mean)} days · median ${f1(t.median)} · ${t.n} cases`);});
+    h+=`<div class="ltg-readout"><div class="ltg-ro-h">Digital production lead time<span>average calendar days, On Hold left out</span></div><div class="ltg-ro-chips">${c}</div></div>`;
+  }
   h+='<div class="ltg-sum">'+buckets.map(b=>{const w=(b.total||0)/total*100;return `<div style="width:${w}%;background:${b.color}" title="${esc(b.name)}: ${f1(b.total)} d (sum of step averages)">${w>=5?f1(b.total)+'d':''}</div>`;}).join('')+'</div>';
   h+='<div class="ltg-sumlbl">'+buckets.map(b=>{const w=(b.total||0)/total*100;return `<div style="width:${w}%">${w>=12?esc(b.name):''}</div>`;}).join('')+'</div>';
   buckets.forEach(b=>{
@@ -5409,7 +5512,7 @@ async function generateReport(){
   const _selChk=id=>document.getElementById('rptChk_'+id)?.checked!==false;
   const _optChk=id=>document.getElementById('rptChk_'+id)?.checked===true;
   const _selVol=_selChk('rptVolChart'),_selWip=_selChk('rptWipChart'),_selProc=_selChk('rptProcessChart');
-  const _selLt=_selChk('rptLtChart'),_selFpy=_selChk('rptFpyChart'),_selOtd=_selChk('rptOtdChart');
+  const _selLt=_selChk('rptLtChart'),_selFpy=_selChk('rptFpyChart'),_selOtd=_selChk('rptOtdChart'),_selDpLt=_selChk('rptDpLtChart');
   const _selEff=_optChk('rptProcEffChart'),_selExcl=_optChk('rptExclChart');
   const _selQt=_optChk('rptQtChart');
   let completed=0;
@@ -5470,6 +5573,7 @@ async function generateReport(){
     if(_selLt) chartFetches.push(fetch(`${API}/analytics/report/lt-by-step?${qs}`).catch(()=>null).then(async r=>{tick('Lead time loaded');return{type:'lt',data:r?.ok?await r.json():null};}));
     if(_selLt) chartFetches.push(fetch(`${API}/analytics/report/lt-grouped?${qs}`).catch(()=>null).then(async r=>({type:'ltg',data:r?.ok?await r.json():null})));
     if(_selFpy) chartFetches.push(fetch(`${API}/analytics/report/fpy-by-step?${qs}`).catch(()=>null).then(async r=>{tick('FPY loaded');return{type:'fpy',data:r?.ok?await r.json():null};}));
+    if(_selDpLt) chartFetches.push(fetch(`${API}/analytics/report/dp-lt-trend?${buildRptQS()}`).catch(()=>null).then(async r=>({type:'dplt',data:r?.ok?await r.json():null})));
     if(_selOtd) chartFetches.push(fetch(`${API}/analytics/report/otd-trend?${buildRptQS({granularity:gran==='weekly'?'weekly':'monthly'})}`).catch(()=>null).then(async r=>({type:'otdt',data:r?.ok?await r.json():null})));
     if(_selOtd) chartFetches.push(fetch(`${API}/analytics/report/otd?${qs}`).catch(()=>null).then(async r=>{tick('OTD loaded');return{type:'otd',data:r?.ok?await r.json():null};}));
     if(_selEff) chartFetches.push(fetch(`${API}/analytics/process-efficiency?${qs}`).catch(()=>null).then(async r=>{tick('Efficiency loaded');return{type:'eff',data:r?.ok?await r.json():null};}));
@@ -5508,6 +5612,7 @@ async function generateReport(){
     if(_selFpy&&byType.fpy?.data){window._rptLastFpy=byType.fpy.data.steps;renderRptFpyChart(byType.fpy.data.steps);}
     if(_selOtd&&byType.otd?.data){window._rptLastOtd=byType.otd.data;renderRptOtdChart(byType.otd.data);}
     if(_selOtd&&byType.otdt?.data){try{renderRptOtdTrend(byType.otdt.data);}catch(e){console.error('OTD trend failed',e);}}
+    if(_selDpLt&&byType.dplt?.data){try{rptDpLtRaw=byType.dplt.data;rptDpLtGran=(gran==='weekly')?'weekly':'monthly';rptDpLtShowPrev=document.getElementById('rptDpLtPrevChk')?.checked!==false;rptDpLtSyncToggles();renderRptDpLtChart();}catch(e){console.error('DP lead time trend failed',e);}}
     if(_selEff&&byType.eff?.data&&typeof renderRptProcEffChart==='function')renderRptProcEffChart(byType.eff.data);
     if(_selExcl&&byType.excl?.data&&typeof renderRptExclChart==='function')renderRptExclChart(byType.excl.data);
     if(_selQt&&byType.qt?.data&&typeof renderRptQtChart==='function')renderRptQtChart(byType.qt.data);
@@ -5553,7 +5658,7 @@ function rptUnselectAllCharts(){
 }
 function rptSyncChartVisibility(){
   // Default charts — show/hide card based on checkbox
-  ['rptVolChart','rptWipChart','rptProcessChart','rptLtChart','rptFpyChart','rptOtdChart'].forEach(id=>{
+  ['rptVolChart','rptWipChart','rptProcessChart','rptLtChart','rptFpyChart','rptOtdChart','rptDpLtChart'].forEach(id=>{
     const cb=document.getElementById('rptChk_'+id);
     const canvas=document.getElementById(id);
     if(!canvas)return;
@@ -5655,7 +5760,7 @@ async function exportReportPdf(){
 
   // Hide UI chrome during capture
   const hiddenEls=[];
-  ['.copy-btn','.chart-settings-btn','.rcs-panel','.ltg-dd','#rptVolToggles',
+  ['.copy-btn','.chart-settings-btn','.rcs-panel','.ltg-dd','#rptVolToggles','#rptDpLtToggles',
    '#rptWipWeeklyBtn','#rptWipMonthlyBtn','#rptExportBtn','#rptGenerateBtn'].forEach(sel=>{
     document.querySelectorAll(sel).forEach(el=>{
       hiddenEls.push({el,v:el.style.visibility});

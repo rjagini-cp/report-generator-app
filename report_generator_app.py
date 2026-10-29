@@ -3335,27 +3335,27 @@ def _norm_name(s):
     return re.sub(r"\s+", " ", str(s or "").strip()).lower()
 
 
+PSP_USER_ROLES = ("REVIEWER", "WORKER")     # who counts as a surgical plan user: the people who signed off the plan (not the surgeon / APPROVER)
+
+
 def psp_user_cond(args, alias='f'):
-    """SQL condition: the case's FINAL Proposed Surgical Plan REVIEWER ACCEPT was given by one of the
-    selected users (param psp_user, names separated by '|'). Empty string when the filter isn't set.
-    Each case counts under the person who completed the plan; cases with no plan sign-off yet have no
-    reviewer and are excluded while the filter is active."""
+    """SQL condition: one of the selected users (param psp_user, names separated by '|') signed off the case's
+    Proposed Surgical Plan as REVIEWER or WORKER (an ACCEPT at any time). Empty string when the filter isn't set.
+    Deliberately simple: no 'final sign-off' logic, so it cannot be fooled by a later automatic or US sign-off."""
     raw = (args.get('psp_user', '') or '').strip()
     names = [_norm_name(n) for n in raw.split('|') if n.strip()]
     if not names:
         return ""
     lst = "','".join(_sql_lit(n) for n in names)
+    roles = ",".join(f"'{r}'" for r in PSP_USER_ROLES)
     return f"""{alias}.id IN (
-        SELECT caseId FROM (
-            SELECT w_psp.caseId,
-                   REGEXP_REPLACE(LOWER(TRIM(w_psp.signature)), r'\\s+', ' ') AS sig,
-                   ROW_NUMBER() OVER (PARTITION BY w_psp.caseId ORDER BY w_psp.createdAt DESC) AS rn
-            FROM {tbl('WorkModuleSignoff')} w_psp
-            JOIN {tbl('WorkModuleInstance')} wi_psp ON w_psp.workModuleInstanceId = wi_psp.id
-            JOIN {tbl('WorkModule')} wm_psp ON wi_psp.workModuleId = wm_psp.id
-            WHERE w_psp.deleted = false AND wm_psp.name = 'Proposed Surgical Plan'
-              AND w_psp.workModuleUserType = 'REVIEWER' AND w_psp.workModuleSignatureType = 'ACCEPT'
-        ) WHERE rn = 1 AND sig IN ('{lst}')
+        SELECT w_psp.caseId
+        FROM {tbl('WorkModuleSignoff')} w_psp
+        JOIN {tbl('WorkModuleInstance')} wi_psp ON w_psp.workModuleInstanceId = wi_psp.id
+        JOIN {tbl('WorkModule')} wm_psp ON wi_psp.workModuleId = wm_psp.id
+        WHERE w_psp.deleted = false AND wm_psp.name = 'Proposed Surgical Plan'
+          AND w_psp.workModuleSignatureType = 'ACCEPT' AND w_psp.workModuleUserType IN ({roles})
+          AND REGEXP_REPLACE(LOWER(TRIM(w_psp.signature)), r'\\s+', ' ') IN ('{lst}')
     )"""
 
 
@@ -3958,78 +3958,240 @@ def report_otd_trend():
         return handle_error(request.endpoint, e)
 
 
+# ── Digital Production lead time trend (selected period + the 3 months before it) ────────────────────────────
+def _legacy_case_where(args):
+    conds = ["f.deleted = false"]
+    product = args.get('product', '').strip()
+    product_group = args.get('product_group', '').strip()
+    case_type = args.get('case_type', '').strip()
+    surgeon = args.get('surgeon', '').strip()
+    if product:
+        prods = [sanitize(p) for p in product.split(',') if p.strip()]
+        conds.append("cc.name IN ('" + "','".join(prods) + "')")
+    elif product_group:
+        all_prods = []
+        for g in [g.strip() for g in product_group.split(',')]:
+            all_prods.extend(PRODUCT_GROUPS.get(g, []))
+        if all_prods:
+            conds.append("cc.name IN ('" + "','".join(all_prods) + "')")
+    if case_type:
+        types = [sanitize(t) for t in case_type.split(',') if t.strip()]
+        conds.append("ct.name IN ('" + "','".join(types) + "')")
+    if surgeon:
+        conds.append(f"LOWER(f.alias) LIKE LOWER('%{sanitize(surgeon)}%')")
+    pc = psp_user_cond(args, 'f')
+    if pc:
+        conds.append(pc)
+    return " AND ".join(conds)
+
+
+def _legacy_dp_sql(legacy_where, win_from_s, win_to_s):
+    """One row per case (legacy digital lead time: scan upload -> PSP reviewer accept, minus hold days and the
+    surgeon wait) for every other product; the case's date is its effective PSP date."""
+    return f"""
+    WITH {signoff_cte()},
+         {on_hold_cte()},
+    case_dates AS (
+        SELECT f.id AS caseId, ct.name AS case_type,
+            s.first_scan_upload_date, s.ship_wrk_comp_date,
+            sd.first_psp_review_date, sd.surgeon_approval_date, sd.peer_review_date,
+            DATE(LEAST(COALESCE(sd.first_psp_review_date, DATETIME '9999-12-31'),
+                       COALESCE(sd.peer_review_date,      DATETIME '9999-12-31'),
+                       COALESCE(CAST(s.ship_wrk_comp_date AS DATETIME), DATETIME '9999-12-31'))) AS effective_psp_date,
+            COALESCE(oh.total_hold_days, 0) AS hold_days
+        FROM {tbl('Case')} f
+        JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
+        LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
+        LEFT JOIN {tbl('vw_lkup_stage_log_dates')} s ON f.id = s.caseId
+        LEFT JOIN signoff_dates sd ON f.id = sd.caseId
+        LEFT JOIN on_hold_time oh ON f.id = oh.caseId
+        WHERE {legacy_where}
+          AND (sd.first_psp_review_date IS NOT NULL OR sd.peer_review_date IS NOT NULL OR s.ship_wrk_comp_date IS NOT NULL)
+    ),
+    pop AS (
+        SELECT * FROM case_dates
+        WHERE first_scan_upload_date IS NOT NULL
+          AND effective_psp_date >= '{win_from_s}' AND effective_psp_date <= '{win_to_s}'
+    )
+    SELECT caseId, case_type, effective_psp_date,
+        CASE WHEN first_psp_review_date IS NOT NULL AND first_scan_upload_date IS NOT NULL THEN
+            GREATEST(0, TIMESTAMP_DIFF(CAST(first_psp_review_date AS DATETIME), first_scan_upload_date, DAY)
+                        - hold_days
+                        - GREATEST(0, COALESCE(TIMESTAMP_DIFF(surgeon_approval_date, first_psp_review_date, DAY), 0)))
+             ELSE NULL END AS digital_lt
+    FROM pop"""
+
+
+def _dp_key(ts, gran):
+    d = pd.Timestamp(ts).normalize()
+    if gran == 'weekly':
+        d = d - pd.Timedelta(days=int(d.weekday()))
+        return d.strftime('%Y-%m-%d')
+    return d.strftime('%Y-%m')
+
+
+def _dp_lt_series(frame, sel_from, sel_to, win_from):
+    """frame: when (naive Timestamp), case_type, lt (days). Monthly AND weekly points for the window, overall and per
+    case type, so the page can switch between them without another request."""
+    df = frame.copy()
+    df["case_type"] = df["case_type"].fillna("").astype(str).replace("", "(no case type)")
+    df = df[df["lt"].notna()]
+    order = list(df["case_type"].value_counts().index)
+    out = {"case_types": order}
+
+    def stat(x):
+        if x is None or len(x) == 0:
+            return None
+        return {"n": int(len(x)), "mean": round(float(x.mean()), 1), "median": round(float(x.median()), 1)}
+
+    for gran in ("monthly", "weekly"):
+        keys = _otd_trend_periods(win_from, sel_to, gran)
+        df["_k"] = df["when"].map(lambda t, g=gran: _dp_key(t, g)) if len(df) else []
+        groups = {k: g for k, g in df.groupby("_k")} if len(df) else {}
+        pts = []
+        for k in keys:
+            g = groups.get(k)
+            pts.append({"period": k, "label": _otd_period_label(k, gran),
+                        "selected": _otd_period_selected(k, gran, sel_from, sel_to),
+                        "overall": stat(g["lt"]) if g is not None else None,
+                        "types": [stat(g.loc[g["case_type"] == ct, "lt"]) if g is not None else None for ct in order]})
+        out[gran] = pts
+    return out
+
+
+@app.route("/analytics/report/dp-lt-trend", methods=["GET"])
+def report_dp_lt_trend():
+    """Average Digital Production lead time per week AND per month for the selected period plus the 3 months before it,
+    overall and per case type. Shoulder / ankle use the new definition (every step from Scan Exception through
+    Documentation Transfer & Parts Request, On Hold left out, case counted when its last digital step lands);
+    every other product uses the legacy digital lead time."""
+    try:
+        args = request.args
+        today = pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
+        date_from = validate_date(args.get('date_from', ''))
+        date_to = validate_date(args.get('date_to', ''))
+        sel_to = pd.Timestamp(date_to) if date_to else today
+        sel_from = pd.Timestamp(date_from) if date_from else (sel_to - pd.DateOffset(months=5)).replace(day=1)
+        win_from = sel_from.replace(day=1) - pd.DateOffset(months=3)
+        win_from_s, win_to_s = win_from.strftime('%Y-%m-%d'), sel_to.strftime('%Y-%m-%d')
+        case_where, selected = _ltg_case_where(args)
+        if len(set(selected)) == 1 and selected[0] in _LTG_PRODUCTS:
+            definition = "new"
+            table, meta = _ltg_cached_table(case_where, selected[0], refresh=args.get('refresh') == 'true')
+            sub = _otd_new_frame(table, win_from_s, win_to_s) if len(table) else None
+            if sub is None or len(sub) == 0:
+                frame = pd.DataFrame({"when": pd.Series([], dtype="datetime64[ns]"), "case_type": [], "lt": []})
+            else:
+                frame = pd.DataFrame({"when": sub["end_ts"].dt.tz_convert("UTC").dt.tz_localize(None).values,
+                                      "case_type": sub["case_type"].values, "lt": sub["lt_otd"].values})
+        else:
+            definition = "legacy"
+            raw = client.query(_legacy_dp_sql(_legacy_case_where(args), win_from_s, win_to_s)).to_dataframe()
+            frame = pd.DataFrame({"when": pd.to_datetime(raw["effective_psp_date"]) if len(raw) else pd.Series([], dtype="datetime64[ns]"),
+                                  "case_type": raw["case_type"] if len(raw) else [],
+                                  "lt": pd.to_numeric(raw["digital_lt"], errors="coerce") if len(raw) else []})
+        out = _dp_lt_series(frame, sel_from, sel_to, win_from)
+        out.update({"definition": definition, "sel_from": sel_from.strftime('%Y-%m-%d'), "sel_to": sel_to.strftime('%Y-%m-%d'),
+                    "win_from": win_from_s})
+        return jsonify(out)
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+
 # ── Surgical Plan User options ───────────────────────────────────────────────
 _NOT_INDIA_TEAMS = {"excluded", "others", "other", "nan", ""}
 
 
+_PSP_OPT_CACHE = {}
+_PSP_OPT_TTL = 300
+
+
 @app.route("/analytics/psp-users", methods=["GET"])
 def psp_users():
-    """Reviewers who completed a surgical plan (their sign-off is the FINAL Proposed Surgical Plan reviewer
-    accept on the case), within the current date range / product / case types, sorted by cases completed.
-    Each name carries its team from the Accounts sheet: a BigQuery-system user with a team is India;
-    anyone not listed (or listed as excluded) is 'USA / not listed'."""
+    """Surgical plan users for the filter: everyone who signed off a Proposed Surgical Plan (REVIEWER or WORKER ACCEPT)
+    within the current date range / product / case types, with the number of cases they signed off, most first.
+    Each name carries its team from the Accounts sheet (BigQuery system + a real team = India; anyone else is
+    'USA / not listed'). Always answers with JSON: if something fails it returns an empty list plus an 'error' text,
+    and ?debug=1 adds the raw signers by role so the data can be inspected."""
+    empty = {"users": [], "teams": [], "india_reviewers": 0, "other_reviewers": 0, "teams_available": False}
     try:
         args = request.args
         date_from = validate_date(args.get('date_from', ''))
         date_to = validate_date(args.get('date_to', ''))
-        # the reviewer filter itself must not narrow its own option list
-        no_psp = {k: v for k, v in args.items() if k != 'psp_user'}
+        no_psp = {k: v for k, v in args.items() if k != 'psp_user'}          # the filter must not narrow its own list
         where, _sel = _ltg_case_where(no_psp)
         where = where.replace("f.canceled = false", "1=1")
+        debug = args.get('debug') == '1'
+        key = (where, date_from, date_to)
+        hit = _PSP_OPT_CACHE.get(key)
+        if hit and not debug and _ltg_time.time() - hit[0] < _PSP_OPT_TTL:
+            return jsonify(hit[1])
         date_sql = ""
         if date_from:
-            date_sql += f" AND fr.d >= '{date_from}'"
+            date_sql += f" AND DATE(CAST(w.createdAt AS TIMESTAMP)) >= '{date_from}'"
         if date_to:
-            date_sql += f" AND fr.d <= '{date_to}'"
+            date_sql += f" AND DATE(CAST(w.createdAt AS TIMESTAMP)) <= '{date_to}'"
+        roles = ",".join(f"'{r}'" for r in PSP_USER_ROLES)
         query = f"""
-        WITH final_rev AS (
-            SELECT w.caseId, w.signature, DATE(CAST(w.createdAt AS TIMESTAMP)) AS d,
-                   ROW_NUMBER() OVER (PARTITION BY w.caseId ORDER BY w.createdAt DESC) AS rn
-            FROM {tbl('WorkModuleSignoff')} w
-            JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
-            JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
-            WHERE w.deleted = false AND wm.name = 'Proposed Surgical Plan'
-              AND w.workModuleUserType = 'REVIEWER' AND w.workModuleSignatureType = 'ACCEPT'
-              AND w.signature IS NOT NULL AND TRIM(w.signature) != ''
-        )
-        SELECT fr.signature AS name, COUNT(DISTINCT fr.caseId) AS cases
-        FROM final_rev fr
-        JOIN {tbl('Case')} f ON fr.caseId = f.id
+        SELECT w.signature AS name, COUNT(DISTINCT w.caseId) AS cases
+        FROM {tbl('WorkModuleSignoff')} w
+        JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
+        JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
+        JOIN {tbl('Case')} f ON w.caseId = f.id
         JOIN {tbl('CaseCategory')} cc ON f.caseCategoryId = cc.id
         LEFT JOIN {tbl('CaseType')} ct ON f.caseTypeId = ct.id
-        WHERE fr.rn = 1 AND {where}{date_sql}
-        GROUP BY fr.signature
+        WHERE w.deleted = false AND wm.name = 'Proposed Surgical Plan'
+          AND w.workModuleSignatureType = 'ACCEPT' AND w.workModuleUserType IN ({roles})
+          AND w.signature IS NOT NULL AND TRIM(w.signature) != ''
+          AND {where}{date_sql}
+        GROUP BY w.signature
         """
         df = client.query(query).to_dataframe()
-        groups = get_user_groups().get("bigquery", {}) or {}
         team_of = {}
-        for team, names in groups.items():
-            if str(team).strip().lower() in _NOT_INDIA_TEAMS:
-                continue
-            for nm in names:
-                team_of[_norm_name(nm)] = str(team).strip()
+        try:                                                                  # team tags are a nicety: never let them break the list
+            groups = get_user_groups().get("bigquery", {}) or {}
+            for team, names in groups.items():
+                if str(team).strip().lower() in _NOT_INDIA_TEAMS:
+                    continue
+                for nm in names:
+                    team_of[_norm_name(nm)] = str(team).strip()
+        except Exception as ge:
+            logger.warning("psp-users: team lookup failed (%s); listing users without team tags", ge)
         merged = {}
-        for rec in df.itertuples(index=False):
-            key = _norm_name(rec.name)
-            cur = merged.setdefault(key, {"name": str(rec.name).strip(), "cases": 0, "_best": 0})
-            cur["cases"] += int(rec.cases)
-            if int(rec.cases) > cur["_best"]:
-                cur["name"], cur["_best"] = str(rec.name).strip(), int(rec.cases)
-        users = []
-        for key, u in merged.items():
-            users.append({"name": u["name"], "cases": u["cases"], "team": team_of.get(key)})
-        users.sort(key=lambda u: (-u["cases"], u["name"].lower()))
+        for name, cases in zip(df["name"].tolist(), df["cases"].tolist()):
+            k = _norm_name(name)
+            cur = merged.setdefault(k, {"name": str(name).strip(), "cases": 0, "_best": 0})
+            cur["cases"] += int(cases)
+            if int(cases) > cur["_best"]:
+                cur["name"], cur["_best"] = str(name).strip(), int(cases)
+        users = sorted(({"name": u["name"], "cases": u["cases"], "team": team_of.get(k)} for k, u in merged.items()),
+                       key=lambda u: (-u["cases"], u["name"].lower()))
         teams = {}
         for u in users:
             if u["team"]:
                 teams[u["team"]] = teams.get(u["team"], 0) + 1
-        return jsonify({"users": users,
-                        "teams": [{"team": t, "reviewers": n} for t, n in sorted(teams.items(), key=lambda kv: (-kv[1], kv[0]))],
-                        "india_reviewers": sum(1 for u in users if u["team"]),
-                        "other_reviewers": sum(1 for u in users if not u["team"]),
-                        "teams_available": bool(team_of)})
+        payload = {"users": users,
+                   "teams": [{"team": t, "reviewers": n} for t, n in sorted(teams.items(), key=lambda kv: (-kv[1], kv[0]))],
+                   "india_reviewers": sum(1 for u in users if u["team"]),
+                   "other_reviewers": sum(1 for u in users if not u["team"]),
+                   "teams_available": bool(team_of)}
+        if debug:
+            dq = f"""
+            SELECT w.workModuleUserType AS role, w.workModuleSignatureType AS stype, w.signature AS name, COUNT(DISTINCT w.caseId) AS cases
+            FROM {tbl('WorkModuleSignoff')} w
+            JOIN {tbl('WorkModuleInstance')} wi ON w.workModuleInstanceId = wi.id
+            JOIN {tbl('WorkModule')} wm ON wi.workModuleId = wm.id
+            WHERE w.deleted = false AND wm.name = 'Proposed Surgical Plan'{date_sql}
+            GROUP BY 1, 2, 3 ORDER BY cases DESC LIMIT 60"""
+            payload["diagnostics"] = {"signers_by_role": client.query(dq).to_dataframe().to_dict("records"), "roles_used": list(PSP_USER_ROLES)}
+        else:
+            _PSP_OPT_CACHE[key] = (_ltg_time.time(), payload)
+            if len(_PSP_OPT_CACHE) > 60:
+                _PSP_OPT_CACHE.pop(next(iter(_PSP_OPT_CACHE)))
+        return jsonify(payload)
     except Exception as e:
-        return handle_error(request.endpoint, e)
+        handle_error(request.endpoint, e)                                     # logs the traceback
+        return jsonify({**empty, "error": str(e)[:300]})
 
 
 if __name__ == "__main__":
