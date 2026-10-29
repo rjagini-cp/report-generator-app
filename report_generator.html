@@ -4733,7 +4733,7 @@ function rptPspUpdateNotice(){
   const box=document.getElementById('rptPspNotice'), txt=document.getElementById('rptPspNoticeTxt'); if(!box)return;
   const n=SEL.rptPspUser?.length||0;
   box.style.display=n?'block':'none';
-  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): volume, process counts, lead time, first pass yield and on-time delivery only count cases they signed off the plan for (submitted volume therefore leaves out cases not yet signed off). The WIP tiles and the WIP trend ignore this filter, because work in progress has no plan sign-off yet.`;
+  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): completed cases, lead time by step, on-time delivery, the lead time trend and the total / digital / surgeon lead time KPIs only count cases they signed off the plan for. Submitted scans, completed cases per process, first pass yield, queue time and everything WIP are not filtered, because those include work that has not reached plan sign-off yet.`;
 }
 async function rptPspPrune(){ if(SEL.rptPspUser?.length)await loadRptPspUsers(true); }
 

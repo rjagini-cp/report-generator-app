@@ -650,7 +650,7 @@ def volume_where_clause(args):
             WHERE {sub_where}
         )""")
     _pc = psp_user_cond(args, 'f')
-    if _pc:
+    if _pc and args.get('date_field', '').strip() != 'first_scan_upload_date':     # the Submitted series is not filtered by plan user
         conditions.append(_pc)
     return " AND ".join(conditions)
 
@@ -1183,7 +1183,7 @@ def report_process_counts():
     Config: app.py -> PRODUCT_STEPS
     """
     try:
-        args = request.args
+        args = _without_psp(request.args)        # per-step populations include the early steps: not filtered by plan user
         date_from = args.get('date_from', '')
         date_to   = args.get('date_to', '')
         product   = args.get('product', '').strip()
@@ -1336,7 +1336,7 @@ def report_lt_by_step():
     Config: app.py -> PRODUCT_STEPS
     """
     try:
-        args = request.args
+        args = _without_psp(request.args)        # per-step populations include the early steps: not filtered by plan user
         date_from = args.get('date_from', '')
         date_to   = args.get('date_to', '')
         product   = args.get('product', '').strip()
@@ -1538,7 +1538,7 @@ def report_fpy_by_step():
     Config: app.py -> PRODUCT_STEPS
     """
     try:
-        args = request.args
+        args = _without_psp(request.args)        # per-step populations include the early steps: not filtered by plan user
         date_from = args.get('date_from', '')
         date_to   = args.get('date_to', '')
         product   = args.get('product', '').strip()
@@ -1725,7 +1725,7 @@ def report_cases_by_step():
       product, product_group, case_type, surgeon — standard filters
     """
     try:
-        args = request.args
+        args = _without_psp(request.args)        # per-step populations include the early steps: not filtered by plan user
         step = args.get('step', '').strip()
         if not step:
             return jsonify({"error": "step parameter required"}), 400
@@ -1936,7 +1936,7 @@ def report_volume():
         # Include cancelled cases — PSP completion is the milestone; post-PSP cancellation should not affect volume
         case_conds = ["f.deleted = false"]
         _pc = psp_user_cond(args, 'f')
-        if _pc:
+        if _pc and args.get('date_field', '').strip() != 'first_scan_upload_date':   # Submitted (scan upload) is not filtered by plan user
             case_conds.append(_pc)
         if product:
             prods = [p.strip() for p in product.split(',')]
@@ -2408,7 +2408,7 @@ def report_queue_time():
     Response: { steps: [{step, product, avg_queue_hours, median_queue_hours, case_count}] }
     """
     try:
-        query = _build_queue_time_query(request.args)
+        query = _build_queue_time_query(_without_psp(request.args))      # queue time covers work in progress: not filtered by plan user
         df = client.query(query).to_dataframe()
 
         if df.empty:
@@ -2511,7 +2511,7 @@ def kpi_digital():
 @app.route("/analytics/kpi/seg", methods=["GET"])
 def kpi_seg():
     try:
-        args = request.args
+        args = _without_psp(request.args)        # early-step KPI: not filtered by plan user
         return kpi_or_cases(args, 'sd.seg_review_date', METRIC_MAP['seg_lt'][0],
             args.get('fetch_cases')=='true', exclude_outliers=args.get('exclude_outliers')=='true',
             avg_digital_lt=float(args.get('avg_digital_lt',0)))
@@ -3336,8 +3336,12 @@ def _norm_name(s):
 
 
 def _without_psp(args):
-    """Work in progress has no plan sign-off yet, so the Surgical Plan User filter does not apply to the WIP tiles,
-    the On Hold count or the WIP trend: they ignore psp_user whatever the page sends."""
+    """The Surgical Plan User filter only makes sense for charts that count COMPLETED cases (a case has been signed off).
+    Everything that includes work not yet signed off ignores it, whatever the page sends:
+      ignored : WIP tiles / On Hold / WIP trend, Submitted volume, per-step counts, per-step lead time (flat), first pass
+                yield, queue time, segmentation KPI
+      applied : Completed volume + its case list, lead time by step (grouped), On-Time Delivery (+ trend),
+                Digital Production lead time trend, total / digital / surgeon lead time KPIs"""
     return {k: v for k, v in args.items() if k != 'psp_user'}
 
 
