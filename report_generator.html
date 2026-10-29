@@ -500,7 +500,7 @@
 .ltg-chip i{font-style:normal;color:#6b7280;font-size:9.5px}
 .ltg-chip.all{background:#e6f4f7;border-color:var(--accent)}
 .ltg-chip.off{opacity:.38}
-#rptCard_dplt{display:flex;flex-direction:column;height:360px;box-sizing:border-box;overflow:hidden;margin-bottom:14px}
+#rptCard_dplt{display:flex;flex-direction:column;height:360px;box-sizing:border-box;overflow:hidden;margin-bottom:0}
 #rptCard_dplt .rpt-chart-wrap{flex:1 1 auto;min-height:0;height:auto;position:relative}
 #rptCard_dplt .logic-caption{font-size:9px;line-height:1.35;margin-top:4px}
 </style>
@@ -961,7 +961,18 @@
               <div class="logic-caption" id="rptLtCaption">Average calendar days from previous step's effective completion to this step's effective completion. Peer Review excludes surgeon wait. Population per step matches the Completed Cases chart. Click a bar to view cases.</div>
               <div id="rptLtInfo" style="font-size:9px;color:var(--text-4);margin-top:4px"><i class="fa fa-info-circle"></i> Sub-step LTs scaled from Digital Production LT · Surgeon Approval drawn directly from KPI</div>
             </div>
+
+              <div class="rpt-chart-card" id="rptCard_dplt" style="position:relative">
+            <button class="copy-btn" id="rcs_cpbtn_rptDpLtChart" onclick="copyRptCardEl(this,'Digital Production Lead Time Trend','rptCard_dplt')"><i class="fa fa-copy"></i> Copy</button>
+            <div class="rpt-chart-title"><i class="fa fa-stopwatch"></i> Digital Production Lead Time Trend <span style="font-weight:400;font-size:11px;color:var(--text-4)">average calendar days, On Hold left out</span></div>
+            <div id="rptDpLtToggles" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+              <button class="chart-toggle" id="rptDpLtWeeklyBtn" onclick="setRptDpLtGran('weekly')">Weekly</button>
+              <button class="chart-toggle active" id="rptDpLtMonthlyBtn" onclick="setRptDpLtGran('monthly')">Monthly</button>
+              <label class="vol-prev" id="rptDpLtPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="rptDpLtPrevChk" checked onchange="setRptDpLtPrev(this.checked)"/> Show previous 3 months</label>
             </div>
+            <div class="rpt-chart-wrap"><canvas id="rptDpLtChart"></canvas></div>
+            <div class="logic-caption" id="rptDpLtCaption">Average Digital Production lead time per period, overall and for each case type in the main filter. The shaded band is the 3 months before the selected period.</div>
+          </div>            </div>
             <div class="rpt-col" id="rptColRight">
               <div class="rpt-chart-card rpt-std" id="rptCard_wip" style="position:relative">
               <button class="copy-btn" id="rcs_cpbtn_rptWipChart" onclick="copyRptChart('rptWipChart','Digital Production WIP Trend',event)"><i class="fa fa-copy"></i> Copy</button>
@@ -1031,20 +1042,6 @@
             </div>
             </div>
           </div><!-- /rpt-cols -->
-
-          <div class="rpt-chart-card" id="rptCard_dplt" style="position:relative">
-            <button class="copy-btn" id="rcs_cpbtn_rptDpLtChart" onclick="copyRptCardEl(this,'Digital Production Lead Time Trend','rptCard_dplt')"><i class="fa fa-copy"></i> Copy</button>
-            <div class="rpt-chart-title"><i class="fa fa-stopwatch"></i> Digital Production Lead Time Trend <span style="font-weight:400;font-size:11px;color:var(--text-4)">average calendar days, On Hold left out</span></div>
-            <div id="rptDpLtToggles" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
-              <button class="chart-toggle" id="rptDpLtWeeklyBtn" onclick="setRptDpLtGran('weekly')">Weekly</button>
-              <button class="chart-toggle active" id="rptDpLtMonthlyBtn" onclick="setRptDpLtGran('monthly')">Monthly</button>
-              <label class="vol-prev" id="rptDpLtPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="rptDpLtPrevChk" checked onchange="setRptDpLtPrev(this.checked)"/> Show previous 3 months</label>
-            </div>
-            <div class="rpt-chart-wrap"><canvas id="rptDpLtChart"></canvas></div>
-            <div class="logic-caption" id="rptDpLtCaption">Average Digital Production lead time per period, overall and for each case type in the main filter. The shaded band is the 3 months before the selected period.</div>
-          </div>
-
-
           <!-- ── Optional: Process Efficiency + Exclusion Breakdown ── -->
           <div class="rpt-section-hdr" id="rptSecHdr_rptProcEffChart" style="display:none"><i class="fa fa-tachometer-alt"></i> Process Efficiency &amp; Exclusions</div>
           <div class="rpt-grid-2" id="rptOptGrid_rptProcEffChart" style="display:none">
@@ -4736,7 +4733,7 @@ function rptPspUpdateNotice(){
   const box=document.getElementById('rptPspNotice'), txt=document.getElementById('rptPspNoticeTxt'); if(!box)return;
   const n=SEL.rptPspUser?.length||0;
   box.style.display=n?'block':'none';
-  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): only cases where they signed off the surgical plan are shown. Cases nobody has signed off yet are left out.`;
+  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): volume, process counts, lead time, first pass yield and on-time delivery only count cases they signed off the plan for (submitted volume therefore leaves out cases not yet signed off). The WIP tiles and the WIP trend ignore this filter, because work in progress has no plan sign-off yet.`;
 }
 async function rptPspPrune(){ if(SEL.rptPspUser?.length)await loadRptPspUsers(true); }
 

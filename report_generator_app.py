@@ -1054,7 +1054,7 @@ def report_wip_trend():
     hold / design-call events; canceled, phase and intake are current-state (they have no history).
     fetch_period=<date> returns the cases behind a point (the page sends the period end date)."""
     try:
-        args        = request.args
+        args        = _without_psp(request.args)    # WIP trend: not filtered by plan user
         granularity = args.get('granularity', 'weekly')
         date_from   = args.get('date_from', '')
         date_to     = args.get('date_to', '')
@@ -2531,7 +2531,7 @@ def kpi_surgeon():
 @app.route("/analytics/kpi/onhold", methods=["GET"])
 def kpi_onhold():
     try:
-        args = request.args
+        args = _without_psp(request.args)           # on hold = work in progress: not filtered by plan user
         fetch = args.get('fetch_cases') == 'true'
         where = build_where_clause(args) + " AND f.onHold = true"
         if fetch:
@@ -2548,7 +2548,7 @@ def kpi_onhold():
 @app.route("/analytics/wip", methods=["GET"])
 def analytics_wip():
     try:
-        args = request.args
+        args = _without_psp(request.args)           # WIP tiles: not filtered by plan user
         where = build_where_clause(args)
         fetch_step = args.get('fetch_step')
         # Cases where Design Call Prep REVIEWER signoff exists AND case sits in PLANNING_REVIEW work queue
@@ -3333,6 +3333,12 @@ def _sql_lit(s):
 
 def _norm_name(s):
     return re.sub(r"\s+", " ", str(s or "").strip()).lower()
+
+
+def _without_psp(args):
+    """Work in progress has no plan sign-off yet, so the Surgical Plan User filter does not apply to the WIP tiles,
+    the On Hold count or the WIP trend: they ignore psp_user whatever the page sends."""
+    return {k: v for k, v in args.items() if k != 'psp_user'}
 
 
 PSP_USER_ROLES = ("REVIEWER", "WORKER")     # who counts as a surgical plan user: the people who signed off the plan (not the surgeon / APPROVER)
