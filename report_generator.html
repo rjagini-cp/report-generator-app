@@ -9,7 +9,11 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- TEST BUILD: the login check that redirects to login.html has been removed -->
+    <script>
+    if (localStorage.getItem('isAuthenticated') !== 'true') {
+        window.location.replace('login.html');
+    }
+  </script>
   <!-- Shared layout stylesheet -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -506,7 +510,6 @@
 </style>
 </head>
 <body>
-<div data-html2canvas-ignore="true" style="position:fixed;bottom:8px;left:8px;z-index:99999;background:#fff7e6;border:1px solid #f5c26b;color:#8a5a00;font:11px/1.3 Arial,sans-serif;padding:4px 8px;border-radius:6px;opacity:.9;pointer-events:none">TEST BUILD &middot; login disabled &middot; do not publish to the website</div>
 <div class="loading-overlay" id="loadingOverlay">
   <img class="loading-gif" id="loadingGif" src="" alt="loading"/>
   <div class="loading-text">What if I told you...<br><strong id="loadingText">the data is loading</strong></div>
@@ -4733,7 +4736,7 @@ function rptPspUpdateNotice(){
   const box=document.getElementById('rptPspNotice'), txt=document.getElementById('rptPspNoticeTxt'); if(!box)return;
   const n=SEL.rptPspUser?.length||0;
   box.style.display=n?'block':'none';
-  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): completed cases, lead time by step, on-time delivery, the lead time trend and the total / digital / surgeon lead time KPIs only count cases they signed off the plan for. Submitted scans, completed cases per process, first pass yield, queue time and everything WIP are not filtered, because those include work that has not reached plan sign-off yet.`;
+  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): volume, process counts, lead time, first pass yield and on-time delivery only count cases they signed off the plan for (submitted volume therefore leaves out cases not yet signed off). The WIP tiles and the WIP trend ignore this filter, because work in progress has no plan sign-off yet.`;
 }
 async function rptPspPrune(){ if(SEL.rptPspUser?.length)await loadRptPspUsers(true); }
 
