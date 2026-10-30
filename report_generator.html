@@ -504,6 +504,9 @@
 #rptCard_dplt .rpt-chart-wrap{flex:1 1 auto;min-height:0;height:auto;position:relative}
 #rptCard_dplt .logic-caption{font-size:9px;line-height:1.35;margin-top:4px}
 #csLtWrap{height:340px !important}
+#rptCard_otddet{display:flex;flex-direction:column;height:360px;box-sizing:border-box;overflow:hidden;margin-bottom:0}
+#rptCard_otddet .rpt-chart-wrap{flex:1 1 auto;min-height:0;height:auto;position:relative}
+#rptCard_otddet .logic-caption{font-size:9px;line-height:1.35;margin-top:4px}
 </style>
 </head>
 <body>
@@ -802,6 +805,7 @@
             <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptFpyChart" checked onchange="rptSyncChartVisibility()"> <span>FPY by Step</span></label>
             <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptOtdChart" checked onchange="rptSyncChartVisibility()"> <span>On-Time Delivery</span></label>
             <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptDpLtChart" checked onchange="rptSyncChartVisibility()"> <span>DP Lead Time Trend</span></label>
+            <label class="rpt-chart-chk"><input type="checkbox" id="rptChk_rptOtdDetChart" checked onchange="rptSyncChartVisibility()"> <span>OTD Trend</span></label>
           </div>
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-4);margin-bottom:5px">Optional Charts</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:10px">
@@ -1041,6 +1045,19 @@
               <div class="otd-trend-wrap"><canvas id="rptOtdTrendChart"></canvas></div>
               <div class="otd-trend-note" id="rptOtdTrendNote"></div>
             </div>
+            
+              <div class="rpt-chart-card" id="rptCard_otddet" style="position:relative">
+                <button class="copy-btn" id="rcs_cpbtn_rptOtdDetChart" onclick="copyRptCardEl(this,'On-Time Delivery Trend','rptCard_otddet')"><i class="fa fa-copy"></i> Copy</button>
+                <div class="rpt-chart-title"><i class="fa fa-bullseye"></i> On-Time Delivery Trend <span style="font-weight:400;font-size:11px;color:var(--text-4)">% of cases on time</span></div>
+                <div id="rptOtdDetToggles" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+                  <button class="chart-toggle" id="rptOtdDetWeeklyBtn" onclick="setRptOtdDetGran('weekly')">Weekly</button>
+                  <button class="chart-toggle active" id="rptOtdDetMonthlyBtn" onclick="setRptOtdDetGran('monthly')">Monthly</button>
+                  <label class="vol-prev" id="rptOtdDetPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="rptOtdDetPrevChk" checked onchange="setRptOtdDetPrev(this.checked)"/> Show previous 3 months</label>
+                  <label class="vol-prev" id="rptOtdDetTypesWrap" style="margin-left:12px" title="Adds one line per case type"><input type="checkbox" id="rptOtdDetTypesChk" onchange="setRptOtdDetTypes(this.checked)"/> Show case type lines</label>
+                </div>
+                <div class="rpt-chart-wrap"><canvas id="rptOtdDetChart"></canvas></div>
+                <div class="logic-caption" id="rptOtdDetCaption">On-time % per period. The shaded band is the 3 months before the selected period.</div>
+              </div>
             </div>
           </div><!-- /rpt-cols -->
           <!-- ── Optional: Process Efficiency + Exclusion Breakdown ── -->
@@ -4860,8 +4877,8 @@ function renderRptQtChart(data){
 }
 
 function destroyRptCharts(){
-  [rptVolInst,rptWipInst,rptProcessInst,rptLtInst,rptFpyInst,rptOtdInst,rptOtdTrendInst,rptDpLtInst,rptProcEffInst,rptExclInst,rptQtInst].forEach(c=>{if(c){try{c.destroy();}catch(e){}}});
-  rptVolInst=rptWipInst=rptProcessInst=rptLtInst=rptFpyInst=rptOtdInst=rptOtdTrendInst=rptDpLtInst=rptProcEffInst=rptExclInst=rptQtInst=null; rptVolNest=null;
+  [rptVolInst,rptWipInst,rptProcessInst,rptLtInst,rptFpyInst,rptOtdInst,rptOtdTrendInst,rptDpLtInst,rptOtdDetInst,rptProcEffInst,rptExclInst,rptQtInst].forEach(c=>{if(c){try{c.destroy();}catch(e){}}});
+  rptVolInst=rptWipInst=rptProcessInst=rptLtInst=rptFpyInst=rptOtdInst=rptOtdTrendInst=rptDpLtInst=rptOtdDetInst=rptProcEffInst=rptExclInst=rptQtInst=null; rptVolNest=null;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -5229,6 +5246,61 @@ function renderRptDpLtChart(){
       plugins:{legend:{display:multi,position:'bottom',labels:{boxWidth:10,font:{size:10}}},
         tooltip:{callbacks:{label:c=>{const p=pts[c.dataIndex];const st=c.dataset._ti!==undefined?p.types[c.dataset._ti]:p.overall;return st?`${c.dataset.label}: ${st.mean}d (median ${st.median}, n=${st.n})`:`${c.dataset.label}: no cases`;}}}},
       scales:{y:{min:0,title:{display:true,text:'Calendar days',font:{size:10}},ticks:{font:{size:10}},grid:{color:'#e5e7eb'}},x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true},grid:{display:false}}}}});
+}
+
+
+// ══════════════════════════════════════════════════════════════
+//  ON-TIME DELIVERY TREND (card under On-Time Delivery): weekly / monthly, overall + optional case type lines,
+//  selected period + the 3 months before it. Both granularities and the previous months arrive in one request.
+// ══════════════════════════════════════════════════════════════
+let rptOtdDetInst=null, rptOtdDetRaw=null, rptOtdDetGran='monthly', rptOtdDetShowPrev=true, rptOtdDetShowTypes=false, rptOtdDetPriorFlags=null;
+function rptOtdDetSyncToggles(){
+  document.getElementById('rptOtdDetWeeklyBtn')?.classList.toggle('active',rptOtdDetGran==='weekly');
+  document.getElementById('rptOtdDetMonthlyBtn')?.classList.toggle('active',rptOtdDetGran==='monthly');
+}
+function setRptOtdDetGran(g){ rptOtdDetGran=g; rptOtdDetSyncToggles(); if(rptOtdDetRaw)renderRptOtdDetChart(); }
+function setRptOtdDetPrev(c){ rptOtdDetShowPrev=!!c; if(rptOtdDetRaw)renderRptOtdDetChart(); }
+function setRptOtdDetTypes(c){ rptOtdDetShowTypes=!!c; if(rptOtdDetRaw)renderRptOtdDetChart(); }
+const rptOtdDetBand={
+  id:'rptOtdDetBand',
+  beforeDatasetsDraw(chart){
+    const fl=rptOtdDetPriorFlags; if(!fl||chart!==rptOtdDetInst||!fl.some(Boolean))return;
+    const {ctx,chartArea:a,scales:{x}}=chart, n=fl.length;
+    const step=n>1?(x.getPixelForValue(1)-x.getPixelForValue(0)):a.width;
+    const first=fl.indexOf(true), last=fl.lastIndexOf(true);
+    const x0=x.getPixelForValue(first)-step/2, x1=x.getPixelForValue(last)+step/2;
+    ctx.save(); ctx.fillStyle='rgba(148,163,184,0.14)'; ctx.fillRect(x0,a.top,x1-x0,a.bottom-a.top);
+    ctx.fillStyle='#64748b'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('PREVIOUS 3 MONTHS',(x0+x1)/2,a.top+10); ctx.restore();
+  }
+};
+Chart.register(rptOtdDetBand);
+function renderRptOtdDetChart(){
+  if(rptOtdDetInst){try{rptOtdDetInst.destroy();}catch(e){} rptOtdDetInst=null;}
+  const canvas=document.getElementById('rptOtdDetChart'); const d=rptOtdDetRaw; if(!canvas||!d)return;
+  let pts=d[rptOtdDetGran]||[]; if(!rptOtdDetShowPrev)pts=pts.filter(p=>p.selected);
+  rptOtdDetPriorFlags=pts.map(p=>!p.selected); if(!rptOtdDetPriorFlags.some(Boolean))rptOtdDetPriorFlags=null;
+  const labels=pts.map(p=>p.label), names=d.case_types||[], canTypes=names.length>1, showTypes=rptOtdDetShowTypes&&canTypes;
+  const tk=document.getElementById('rptOtdDetTypesChk'), tw=document.getElementById('rptOtdDetTypesWrap');
+  if(tk)tk.disabled=!canTypes; if(tw){tw.classList.toggle('disabled',!canTypes);tw.title=canTypes?'Adds one line per case type':'Only one case type in this selection';}
+  const cap=document.getElementById('rptOtdDetCaption');
+  if(cap){
+    const per=rptOtdDetGran==='weekly'?'week':'month', tgt=d.target_days||14;
+    cap.textContent=!pts.some(p=>p.overall)?'No completed cases for this selection and period.'
+      :(d.definition==='new'
+        ?`On-time % per ${per}: cases whose Digital Production lead time (every step from Scan Exception through Documentation Transfer & Parts Request, On Hold left out) was ${tgt} days or less, counted in the ${per} their last digital step landed. Same rule as the donut above. The shaded band is the 3 months before the selected period.`
+        :`On-time % per ${per} using the legacy formula (digital lead time of ${tgt} days or less, or no real PSP accept). The shaded band is the 3 months before the selected period.`);
+  }
+  const smooth={tension:0.3,cubicInterpolationMode:'monotone',spanGaps:true};
+  const ds=[{label:'All case types',data:pts.map(p=>p.overall?p.overall.pct:null),borderColor:'#005F72',backgroundColor:'#005F72',borderWidth:3,
+    pointRadius:pts.map(p=>p.selected?5:3),pointBackgroundColor:'#005F72',pointBorderColor:'#fff',pointBorderWidth:1.5,order:1,...smooth,
+    datalabels:{display:c=>c.dataset.data[c.dataIndex]!=null,anchor:'end',align:'top',offset:4,color:'#1f2933',font:{size:10,weight:'700'},formatter:v=>v==null?'':v.toFixed(0)+'%'}}];
+  if(showTypes)names.forEach((nm,i)=>{const col=RPT_TYPE_PALETTE[i%RPT_TYPE_PALETTE.length];
+    ds.push({label:rptVolTypeName(nm),data:pts.map(p=>p.types[i]?p.types[i].pct:null),borderColor:col,backgroundColor:col,borderWidth:1.8,pointRadius:2.5,order:2,...smooth,datalabels:{display:false},_ti:i});});
+  rptOtdDetInst=new Chart(canvas.getContext('2d'),{type:'line',data:{labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20,right:10}},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label:c=>{const p=pts[c.dataIndex];const st=c.dataset._ti!==undefined?p.types[c.dataset._ti]:p.overall;return st?`${c.dataset.label}: ${st.pct}% on time (${st.on_time} of ${st.n} cases)`:`${c.dataset.label}: no cases`;}}}},
+      scales:{y:{min:0,max:100,title:{display:true,text:'% on time',font:{size:10}},ticks:{font:{size:10},callback:v=>v+'%'},grid:{color:'#e5e7eb'}},x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true},grid:{display:false}}}}});
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -5809,7 +5881,7 @@ async function generateReport(){
   const _selChk=id=>document.getElementById('rptChk_'+id)?.checked!==false;
   const _optChk=id=>document.getElementById('rptChk_'+id)?.checked===true;
   const _selVol=_selChk('rptVolChart'),_selWip=_selChk('rptWipChart'),_selProc=_selChk('rptProcessChart');
-  const _selLt=_selChk('rptLtChart'),_selFpy=_selChk('rptFpyChart'),_selOtd=_selChk('rptOtdChart'),_selDpLt=_selChk('rptDpLtChart');
+  const _selLt=_selChk('rptLtChart'),_selFpy=_selChk('rptFpyChart'),_selOtd=_selChk('rptOtdChart'),_selDpLt=_selChk('rptDpLtChart'),_selOtdDet=_selChk('rptOtdDetChart');
   const _selEff=_optChk('rptProcEffChart'),_selExcl=_optChk('rptExclChart');
   const _selQt=_optChk('rptQtChart');
   let completed=0;
@@ -5871,6 +5943,7 @@ async function generateReport(){
     if(_selLt) chartFetches.push(fetch(`${API}/analytics/report/lt-grouped?${qs}`).catch(()=>null).then(async r=>({type:'ltg',data:r?.ok?await r.json():null})));
     if(_selFpy) chartFetches.push(fetch(`${API}/analytics/report/fpy-by-step?${qs}`).catch(()=>null).then(async r=>{tick('FPY loaded');return{type:'fpy',data:r?.ok?await r.json():null};}));
     if(_selDpLt) chartFetches.push(fetch(`${API}/analytics/report/dp-lt-trend?${buildRptQS()}`).catch(()=>null).then(async r=>({type:'dplt',data:r?.ok?await r.json():null})));
+    if(_selOtdDet) chartFetches.push(fetch(`${API}/analytics/report/otd-trend-detail?${buildRptQS()}`).catch(()=>null).then(async r=>({type:'otdd',data:r?.ok?await r.json():null})));
     if(_selOtd) chartFetches.push(fetch(`${API}/analytics/report/otd-trend?${buildRptQS({granularity:gran==='weekly'?'weekly':'monthly'})}`).catch(()=>null).then(async r=>({type:'otdt',data:r?.ok?await r.json():null})));
     if(_selOtd) chartFetches.push(fetch(`${API}/analytics/report/otd?${qs}`).catch(()=>null).then(async r=>{tick('OTD loaded');return{type:'otd',data:r?.ok?await r.json():null};}));
     if(_selEff) chartFetches.push(fetch(`${API}/analytics/process-efficiency?${qs}`).catch(()=>null).then(async r=>{tick('Efficiency loaded');return{type:'eff',data:r?.ok?await r.json():null};}));
@@ -5909,6 +5982,7 @@ async function generateReport(){
     if(_selFpy&&byType.fpy?.data){window._rptLastFpy=byType.fpy.data.steps;renderRptFpyChart(byType.fpy.data.steps);}
     if(_selOtd&&byType.otd?.data){window._rptLastOtd=byType.otd.data;renderRptOtdChart(byType.otd.data);}
     if(_selOtd&&byType.otdt?.data){try{renderRptOtdTrend(byType.otdt.data);}catch(e){console.error('OTD trend failed',e);}}
+    if(_selOtdDet&&byType.otdd?.data){try{rptOtdDetRaw=byType.otdd.data;rptOtdDetGran=(gran==='weekly')?'weekly':'monthly';rptOtdDetShowPrev=document.getElementById('rptOtdDetPrevChk')?.checked!==false;rptOtdDetShowTypes=!!document.getElementById('rptOtdDetTypesChk')?.checked;rptOtdDetSyncToggles();renderRptOtdDetChart();}catch(e){console.error('OTD trend detail failed',e);}}
     if(_selDpLt&&byType.dplt?.data){try{rptDpLtRaw=byType.dplt.data;rptDpLtGran=(gran==='weekly')?'weekly':'monthly';rptDpLtShowPrev=document.getElementById('rptDpLtPrevChk')?.checked!==false;rptDpLtSyncToggles();renderRptDpLtChart();}catch(e){console.error('DP lead time trend failed',e);}}
     if(_selEff&&byType.eff?.data&&typeof renderRptProcEffChart==='function')renderRptProcEffChart(byType.eff.data);
     if(_selExcl&&byType.excl?.data&&typeof renderRptExclChart==='function')renderRptExclChart(byType.excl.data);
@@ -5955,7 +6029,7 @@ function rptUnselectAllCharts(){
 }
 function rptSyncChartVisibility(){
   // Default charts — show/hide card based on checkbox
-  ['rptVolChart','rptWipChart','rptProcessChart','rptLtChart','rptFpyChart','rptOtdChart','rptDpLtChart'].forEach(id=>{
+  ['rptVolChart','rptWipChart','rptProcessChart','rptLtChart','rptFpyChart','rptOtdChart','rptDpLtChart','rptOtdDetChart'].forEach(id=>{
     const cb=document.getElementById('rptChk_'+id);
     const canvas=document.getElementById(id);
     if(!canvas)return;
@@ -6057,7 +6131,7 @@ async function exportReportPdf(){
 
   // Hide UI chrome during capture
   const hiddenEls=[];
-  ['.copy-btn','.chart-settings-btn','.rcs-panel','.ltg-dd','#rptVolToggles','#rptDpLtToggles',
+  ['.copy-btn','.chart-settings-btn','.rcs-panel','.ltg-dd','#rptVolToggles','#rptDpLtToggles','#rptOtdDetToggles',
    '#rptWipWeeklyBtn','#rptWipMonthlyBtn','#rptExportBtn','#rptGenerateBtn'].forEach(sel=>{
     document.querySelectorAll(sel).forEach(el=>{
       hiddenEls.push({el,v:el.style.visibility});
