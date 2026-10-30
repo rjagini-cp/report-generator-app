@@ -9,11 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script>
-    if (localStorage.getItem('isAuthenticated') !== 'true') {
-        window.location.replace('login.html');
-    }
-  </script>
+  <!-- TEST BUILD: the login check that redirects to login.html has been removed -->
   <!-- Shared layout stylesheet -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -510,6 +506,7 @@
 </style>
 </head>
 <body>
+<div data-html2canvas-ignore="true" style="position:fixed;bottom:8px;left:8px;z-index:99999;background:#fff7e6;border:1px solid #f5c26b;color:#8a5a00;font:11px/1.3 Arial,sans-serif;padding:4px 8px;border-radius:6px;opacity:.9;pointer-events:none">TEST BUILD &middot; login disabled &middot; do not publish to the website</div>
 <div class="loading-overlay" id="loadingOverlay">
   <img class="loading-gif" id="loadingGif" src="" alt="loading"/>
   <div class="loading-text">What if I told you...<br><strong id="loadingText">the data is loading</strong></div>
@@ -1193,9 +1190,13 @@
             <div class="chart-controls" style="margin-bottom:8px">
               <button class="chart-toggle" onclick="setCsGranularity('weekly',this);loadCamstarVolume()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsGranularity('monthly',this);loadCamstarVolume()">Monthly</button>
+              <label class="vol-prev" id="csVolPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csVolPrevChk" onchange="setCsVolPrev(this.checked)"/> Show previous 3 months</label>
+              <label class="vol-prev" id="csVolSplitWrap" style="margin-left:12px" title="Thin bars inside each bar, one per product line"><input type="checkbox" id="csVolSplitChk" onchange="setCsVolSplit(this.checked)"/> Split by product</label>
+              <span id="csVolSplitStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
               <button class="kpi-calc-btn" id="csVolFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('vol')"><i class="fa fa-list"></i> View Cases</button>
             </div>
             <div id="csVolEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
+            <div class="vol-legend" id="csVolTypeLegend"></div>
             <div class="rpt-chart-wrap" id="csVolWrap" style="display:none"></div>
           </div>
 
@@ -1227,21 +1228,26 @@
           <div class="rpt-grid-2">
           <!-- Lead Time by Step chart -->
           <div class="rpt-chart-card" id="csLtCard" style="position:relative;display:none;margin-bottom:16px">
-            <button class="copy-btn" onclick="copyRptChart('csLtChart','Lead Time by Product',event)"><i class="fa fa-copy"></i> Copy</button>
+            <button class="copy-btn" onclick="copyRptChart('csLtChart','Lead Time Trend by Product',event)"><i class="fa fa-copy"></i> Copy</button>
             <button class="chart-settings-btn rcs-btn" id="rcs_btn_csLtChart" onclick="toggleRptSettings('csLtChart',event)"><i class="fa fa-sliders-h"></i> Settings</button>
-            <div class="rpt-chart-title"><i class="fa fa-clock"></i> Lead Time by Product</div>
+            <div class="rpt-chart-title"><i class="fa fa-clock"></i> Lead Time Trend by Product</div>
             <div class="chart-settings-panel rcs-panel" id="rcs_panel_csLtChart">
               <div class="cs-field"><label>Color</label><input type="color" id="rcs_color_csLtChart" value="#7C3AED"/></div>
-              <div class="cs-field"><label>Bar Width <span id="rcs_barwidth_val_csLtChart">70</span>%</label><input type="range" id="rcs_barwidth_csLtChart" min="10" max="100" value="70" oninput="document.getElementById('rcs_barwidth_val_csLtChart').textContent=this.value"/></div>
-              <div class="cs-field"><label>X Min (days)</label><input type="number" id="rcs_ymin_csLtChart" placeholder="auto" style="width:60px"/></div>
-              <div class="cs-field"><label>X Max (days)</label><input type="number" id="rcs_ymax_csLtChart" placeholder="auto" style="width:60px"/></div>
+              <div class="cs-field"><label>Y Min (days)</label><input type="number" id="rcs_ymin_csLtChart" placeholder="auto" style="width:60px"/></div>
+              <div class="cs-field"><label>Y Max (days)</label><input type="number" id="rcs_ymax_csLtChart" placeholder="auto" style="width:60px"/></div>
               <div class="cs-field"><label>Show Labels</label><input type="checkbox" id="rcs_showlabels_csLtChart" checked/></div>
               <button class="cs-apply-btn" onclick="applyRptChartSettings('csLtChart')"><i class="fa fa-check"></i> Apply</button>
               <button class="cs-reset-btn" onclick="resetRptChartSettings('csLtChart')"><i class="fa fa-undo"></i> Reset</button>
             </div>
+            <div class="chart-controls" style="margin-bottom:8px">
+              <button class="chart-toggle" id="csLtWeeklyBtn" onclick="setCsLtGran('weekly')">Weekly</button>
+              <button class="chart-toggle active" id="csLtMonthlyBtn" onclick="setCsLtGran('monthly')">Monthly</button>
+              <label class="vol-prev" id="csLtPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csLtPrevChk" checked onchange="setCsLtPrev(this.checked)"/> Show previous 3 months</label>
+              <span id="csLtStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
+            </div>
             <div id="csLtEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csLtWrap" style="display:none"></div>
-            <div class="logic-caption">Avg days from order entry (first transaction) to final step (last transaction), per product.</div>
+            <div class="logic-caption" id="csLtCaption">Average days from order entry (first transaction) to final step (last transaction), per product line, for each month or week. The shaded band is the 3 months before the selected period. Click a product in the legend to show or hide its line.</div>
           </div>
 
           <!-- Utilization chart -->
@@ -2082,7 +2088,7 @@ function onCsProductGroupChange(){
   updateCount('csStep');updateCount('csUser');
 }
 
-function csParams(granularity){
+function csParams(granularity,range){
   const params=new URLSearchParams();
   params.append('granularity',granularity);
   const pg=document.getElementById('cs-product-group')?.value;
@@ -2093,9 +2099,9 @@ function csParams(granularity){
   if(team)params.append('team',team);
   if(SEL.csStep.length)params.append('step',SEL.csStep.join(','));
   if(SEL.csUser.length)params.append('step_user',SEL.csUser.join(','));
-  const from=document.getElementById('cs-date-from')?.value;
+  const from=range?range.from:document.getElementById('cs-date-from')?.value;
   if(from)params.append('date_from',from);
-  const to=document.getElementById('cs-date-to')?.value;
+  const to=range?range.to:document.getElementById('cs-date-to')?.value;
   if(to)params.append('date_to',to);
   return params.toString();
 }
@@ -2306,33 +2312,142 @@ function renderCsProcessChart(data){
     });
 }
 
-let csLtLastData=null;
+let csLtLastData=null, csLtGran='monthly', csLtShowPrev=true, csLtCache={}, csLtCtx=null, csLtVisible={}, csLtPriorFlags=null;
+const CS_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const CS_COUNT_KEYS=['order_count','orders','n_orders','total_orders','order_cnt','count','n','cases','case_count','total'];   // used to weight the all-products line when the endpoint reports order counts
+const csIso=d=>d.toISOString().slice(0,10);
+// The window the trend covers: the selected range plus the 3 months before it. With no dates chosen: the last 6 months.
+function csLtWindow(){
+  const t=new Date(), today=new Date(Date.UTC(t.getFullYear(),t.getMonth(),t.getDate()));
+  const to=document.getElementById('cs-date-to')?.value, from=document.getElementById('cs-date-from')?.value;
+  const selTo=to?new Date(to+'T00:00:00Z'):today;
+  const selFrom=from?new Date(from+'T00:00:00Z'):new Date(Date.UTC(selTo.getUTCFullYear(),selTo.getUTCMonth()-5,1));
+  const selMonth=new Date(Date.UTC(selFrom.getUTCFullYear(),selFrom.getUTCMonth(),1));
+  const priorFrom=new Date(Date.UTC(selMonth.getUTCFullYear(),selMonth.getUTCMonth()-3,1));
+  return{selFrom,selTo,selMonth,priorFrom};
+}
+function csLtBuckets(gran){
+  const {selFrom,selTo,selMonth,priorFrom}=csLtWindow(), out=[];
+  if(gran==='monthly'){
+    let m=new Date(priorFrom);
+    while(m<=selTo){
+      const mEnd=new Date(Date.UTC(m.getUTCFullYear(),m.getUTCMonth()+1,0));
+      const selected=m>=selMonth; let bf=m, bt=mEnd>selTo?selTo:mEnd;
+      if(m.getTime()===selMonth.getTime()&&selFrom>m)bf=selFrom;                 // the first selected month starts where the range starts
+      out.push({label:CS_MONTHS[m.getUTCMonth()]+' '+m.getUTCFullYear(),from:csIso(bf),to:csIso(bt),selected});
+      m=new Date(Date.UTC(m.getUTCFullYear(),m.getUTCMonth()+1,1));
+    }
+  }else{
+    let w=new Date(priorFrom); w=new Date(w.getTime()-((w.getUTCDay()+6)%7)*86400000);      // Monday on or before the window start
+    while(w<=selTo){
+      const wEnd=new Date(w.getTime()+6*86400000);
+      let bf=w<priorFrom?priorFrom:w; const bt=wEnd>selTo?selTo:wEnd; const selected=bt>=selFrom;
+      if(selected&&bf<selFrom)bf=selFrom;
+      out.push({label:'Wk '+String(w.getUTCMonth()+1).padStart(2,'0')+'/'+String(w.getUTCDate()).padStart(2,'0'),from:csIso(bf),to:csIso(bt),selected});
+      w=new Date(w.getTime()+7*86400000);
+    }
+  }
+  return out;
+}
+// fetch the buckets that are not cached yet (4 requests at a time). Monthly always includes the previous months; weekly only when they are shown.
+async function csLtEnsure(gran){
+  const ctx=csLtCtx; if(!ctx)return;
+  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csLtShowPrev||b.selected);
+  const tasks=[]; let total=0, done=0, failed=0;
+  need.forEach(b=>{const key=`${b.from}|${b.to}`; if(csLtCache[key]!==undefined)return; total++;
+    tasks.push(async()=>{
+      try{const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),25000);
+        const r=await fetch(`${API}/analytics/camstar/lt-by-step?${csParams('monthly',{from:b.from,to:b.to})}`,{signal:ctl.signal}); clearTimeout(to);
+        const j=r.ok?await r.json():null; csLtCache[key]=(j&&!j.error)?j:null; if(!csLtCache[key])failed++;
+      }catch(e){csLtCache[key]=null;failed++;}
+      done++; const st=document.getElementById('csLtStatus'); if(st)st.textContent=`loading lead time ${done}/${total}…`;
+    });});
+  if(tasks.length)await csRunPool(tasks,4);
+  const st=document.getElementById('csLtStatus'); if(st)st.textContent=failed?`${failed} of ${total} requests failed; those periods are left blank`:'';
+}
+function csLtBuild(gran){
+  const buckets=csLtBuckets(gran).filter(b=>csLtShowPrev||b.selected).map(b=>({...b,data:csLtCache[`${b.from}|${b.to}`]||null}));
+  const fam=[], seen=new Set();
+  buckets.forEach(b=>(b.data?.steps||[]).forEach(x=>{if(x.avg_days!=null&&!seen.has(x.process)){seen.add(x.process);fam.push(x.process);}}));
+  const wk=CS_COUNT_KEYS.find(k=>buckets.some(b=>(b.data?.steps||[]).some(x=>typeof x[k]==='number'&&x[k]>0)))||null;
+  const rows=buckets.map(b=>{
+    const m=new Map((b.data?.steps||[]).filter(x=>x.avg_days!=null).map(x=>[x.process,x])), present=[...m.values()];
+    let overall=null, n=0;
+    if(present.length){
+      if(wk){const w=present.map(x=>Number(x[wk])||0), sw=w.reduce((a,v)=>a+v,0); overall=sw>0?present.reduce((a,x,i)=>a+x.avg_days*w[i],0)/sw:present.reduce((a,x)=>a+x.avg_days,0)/present.length; n=sw;}
+      else{overall=present.reduce((a,x)=>a+x.avg_days,0)/present.length; n=present.length;}
+    }
+    return{label:b.label,selected:b.selected,vals:fam.map(f=>m.has(f)?m.get(f).avg_days:null),counts:fam.map(f=>(wk&&m.has(f))?m.get(f)[wk]:null),overall,n};
+  });
+  return{fam,rows,weighted:!!wk};
+}
 async function loadCsLtByStep(){
   const el=document.getElementById('csLtEmpty'); if(el) el.style.display='none';
   try{
-    const res = await fetch(`${API}/analytics/camstar/lt-by-step?${csParams('monthly')}`);
-    const data = await res.json();
-    if(data.error){toast('Lead Time error: '+data.error,'err');return;}
-    csLtLastData = data;
-    renderCsLtChart(data);
+    csLtCtx={id:Date.now()}; csLtCache={}; csLtLastData=null;
+    const chk=document.getElementById('csLtPrevChk'); csLtShowPrev=!chk||chk.checked;
+    csLtSyncToggles();
+    await csLtEnsure(csLtGran);
+    csLtLastData={gran:csLtGran};
+    renderCsLtChart();
   }catch(e){toast('Lead Time error','err');}
 }
-function renderCsLtChart(data){
-  const wrap=document.getElementById('csLtWrap');
-  wrap.style.display='block';
-  const steps=(data.steps||[]).filter(s=>s.avg_days!=null);
-  if(!steps.length){wrap.innerHTML='<div class="chart-empty"><p>No lead time data available</p></div>';return;}
+function csLtSyncToggles(){
+  document.getElementById('csLtWeeklyBtn')?.classList.toggle('active',csLtGran==='weekly');
+  document.getElementById('csLtMonthlyBtn')?.classList.toggle('active',csLtGran==='monthly');
+}
+async function setCsLtGran(g){
+  csLtGran=g; csLtSyncToggles();
+  if(!csLtCtx)return;                                   // nothing generated yet: the choice is used by the next Generate
+  await csLtEnsure(g); csLtLastData={gran:g}; renderCsLtChart();
+}
+async function setCsLtPrev(c){
+  csLtShowPrev=!!c;
+  if(!csLtCtx)return;
+  await csLtEnsure(csLtGran); csLtLastData={gran:csLtGran}; renderCsLtChart();
+}
+const csLtPriorBand={
+  id:'csLtPriorBand',
+  beforeDatasetsDraw(chart){
+    const fl=csLtPriorFlags; if(!fl||chart!==window._csLtInst||!fl.some(Boolean))return;
+    const {ctx,chartArea:a,scales:{x}}=chart, n=fl.length;
+    const step=n>1?(x.getPixelForValue(1)-x.getPixelForValue(0)):a.width;
+    const first=fl.indexOf(true), last=fl.lastIndexOf(true);
+    const x0=x.getPixelForValue(first)-step/2, x1=x.getPixelForValue(last)+step/2;
+    ctx.save(); ctx.fillStyle='rgba(148,163,184,0.14)'; ctx.fillRect(x0,a.top,x1-x0,a.bottom-a.top);
+    ctx.fillStyle='#64748b'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('PREVIOUS 3 MONTHS',(x0+x1)/2,a.top+10); ctx.restore();
+  }
+};
+Chart.register(csLtPriorBand);
+function renderCsLtChart(){
+  const wrap=document.getElementById('csLtWrap'); wrap.style.display='block';
+  if(window._csLtInst){try{window._csLtInst.destroy();}catch(e){} window._csLtInst=null;}
+  const {fam,rows,weighted}=csLtBuild(csLtGran);
+  if(!fam.length||!rows.some(r=>r.overall!=null)){wrap.innerHTML='<div class="chart-empty"><p>No lead time data available for this selection</p></div>';csLtPriorFlags=null;return;}
   if(!document.getElementById('csLtChart'))wrap.innerHTML='<canvas id="csLtChart"></canvas>';
-  const s=getRptChartSettings('csLtChart');
-  const labels=steps.map(x=>x.process);
-  const vals=steps.map(x=>x.avg_days);
-  const ctx=document.getElementById('csLtChart').getContext('2d');
-  if(window._csLtInst){window._csLtInst.destroy();}
-  window._csLtInst=new Chart(ctx,{
-    type:'bar',
-    data:{labels,datasets:[{label:'Avg Days',data:vals,backgroundColor:s.color+'cc',borderColor:s.color,borderRadius:4,barPercentage:s.barWidth/100}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:s.showLabels?{color:'#374151',font:{size:s.dlSize,weight:'600'},anchor:'end',align:'right',formatter:v=>v>0?v+' d':''}:{display:false}},scales:{x:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?undefined:Number(s.yMax),ticks:{color:'#111827',font:{size:s.tickSize}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},y:{ticks:{color:'#111827',font:{size:s.tickSize}},grid:{color:'#e5e7eb'},border:{color:'#374151'}}},layout:{padding:{right:55}}}
-  });
+  const s=getRptChartSettings('csLtChart'), labels=rows.map(r=>r.label);
+  csLtPriorFlags=rows.map(r=>!r.selected); if(!csLtPriorFlags.some(Boolean))csLtPriorFlags=null;
+  // which product lines are drawn by default: the 6 with the most orders (or the longest lead time when counts are not reported); the legend toggles the rest
+  const rank=fam.map((f,i)=>({f,i,score:weighted?rows.reduce((a,r)=>a+(r.counts[i]||0),0):rows.reduce((a,r)=>a+(r.vals[i]||0),0)/Math.max(1,rows.filter(r=>r.vals[i]!=null).length)})).sort((a,b)=>b.score-a.score);
+  const topSet=new Set(rank.slice(0,6).map(x=>x.f)), single=fam.length===1;
+  const smooth={tension:0.35,cubicInterpolationMode:'monotone',spanGaps:true};
+  const ds=[{label:weighted?'All products (weighted by orders)':'All products (simple average)',data:rows.map(r=>r.overall!=null?+r.overall.toFixed(2):null),borderColor:s.color,backgroundColor:s.color,borderWidth:3,pointRadius:rows.map(r=>r.selected?4.5:3),pointBackgroundColor:s.color,pointBorderColor:'#fff',pointBorderWidth:1.5,order:1,hidden:single?true:(csLtVisible['__all']===false),_all:true,...smooth,
+    datalabels:s.showLabels?{display:c=>c.dataset.data[c.dataIndex]!=null,anchor:'end',align:'top',offset:4,color:'#1f2933',font:{size:s.dlSize,weight:'700'},formatter:v=>v==null?'':v.toFixed(1)}:{display:false}}];
+  fam.forEach((f,i)=>{const col=RPT_TYPE_PALETTE[i%RPT_TYPE_PALETTE.length];
+    ds.push({label:f,data:rows.map(r=>r.vals[i]!=null?+r.vals[i].toFixed(2):null),borderColor:col,backgroundColor:col,borderWidth:1.8,pointRadius:2.5,order:2,hidden:csLtVisible[f]!==undefined?!csLtVisible[f]:!(single||topSet.has(f)),_fi:i,...smooth,datalabels:{display:false}});});
+  window._csLtInst=new Chart(document.getElementById('csLtChart').getContext('2d'),{type:'line',data:{labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20,right:10}},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:10,font:{size:10}},
+          onClick:(e,item,legend)=>{const c=legend.chart,i=item.datasetIndex,vis=c.isDatasetVisible(i);c.setDatasetVisibility(i,!vis);csLtVisible[c.data.datasets[i]._all?'__all':c.data.datasets[i].label]=!vis;c.update();}},
+        tooltip:{callbacks:{label:c=>{const r=rows[c.dataIndex];if(c.parsed.y==null)return `${c.dataset.label}: no data`;
+          if(c.dataset._all)return `${c.dataset.label}: ${c.parsed.y.toFixed(1)} d (${weighted?Math.round(r.n)+' orders':r.n+' product lines'})`;
+          const cnt=r.counts[c.dataset._fi];return `${c.dataset.label}: ${c.parsed.y.toFixed(1)} d${cnt!=null?` (${Math.round(cnt)} orders)`:''}`;}}}},
+      scales:{y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?undefined:Number(s.yMax),title:{display:true,text:'Average days',font:{size:s.tickSize},color:'#374151'},ticks:{color:'#111827',font:{size:s.tickSize}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},
+        x:{ticks:{maxRotation:45,font:{size:s.tickSize},color:'#111827',autoSkip:true},grid:{display:false},border:{color:'#374151'}}}}});
+  const cap=document.getElementById('csLtCaption');
+  if(cap)cap.textContent=`Average days from order entry (first transaction) to final step (last transaction), per product line, for each ${csLtGran==='weekly'?'week':'month'}. `
+    +(weighted?'The All products line weights each product line by its number of orders. ':'The All products line is the simple average of the product lines that period (the service does not report order counts). ')
+    +'The shaded band is the 3 months before the selected period. Click a product in the legend to show or hide its line.';
 }
 
 async function fetchCsCases(type){
@@ -2359,18 +2474,147 @@ async function fetchCsForecast(granularity){
 }
 
 let csVolLastData=null, csVolLastSubData=null, csVolLastForecast=null;
+let csVolShowPrev=false, csVolPrior=null, csVolPriorFlags=null;
+// Previous 3 months are fetched WITH the report (separate calls that end where the selected range's first month / week
+// begins, so the selected bars never change); the checkbox only redraws from the stored data.
+// ── product split: the Camstar volume endpoints return one total per period, so the split asks for each product line
+// separately. It only runs when the box is ticked, 4 requests at a time, and what it fetched is kept until the next Generate.
+let csVolSplitOn=false, csVolSplitCache={}, csVolCtx=null, csVolNest=null, csVolSplitBusy=false;
+function csSplitProducts(){
+  const sel=document.getElementById('cs-product-line'); if(!sel)return [];
+  if(sel.value)return [sel.value];                         // one product selected: nothing to split
+  return [...sel.options].map(o=>o.value).filter(Boolean);
+}
+async function csRunPool(tasks,limit){
+  let i=0; const workers=Array.from({length:Math.min(limit,tasks.length)},async()=>{while(i<tasks.length){const t=tasks[i++];await t();}});
+  await Promise.all(workers);
+}
+async function csEnsureSplit(){
+  const ctx=csVolCtx; if(!ctx||!csVolSplitOn)return;
+  const windows=[['sel',ctx.qs]]; if(csVolShowPrev&&ctx.pqs)windows.push(['prior',ctx.pqs]);
+  const tasks=[]; let total=0, done=0, failed=0;
+  windows.forEach(([w,base])=>ctx.products.forEach(pr=>['volume','volume/submitted'].forEach(ep=>{
+    const key=`${w}|${pr}|${ep}`; if(csVolSplitCache[key]!==undefined)return; total++;
+    tasks.push(async()=>{
+      try{const q=new URLSearchParams(base); q.set('product',pr);
+        const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),25000);
+        const r=await fetch(`${API}/analytics/camstar/${ep}?${q.toString()}`,{signal:ctl.signal}); clearTimeout(to);
+        csVolSplitCache[key]=r.ok?await r.json():null; if(!r.ok)failed++;
+      }catch(e){csVolSplitCache[key]=null;failed++;}
+      done++; const st=document.getElementById('csVolSplitStatus'); if(st)st.textContent=`loading product split ${done}/${total}…`;
+    });
+  })));
+  if(!tasks.length)return;
+  csVolSplitBusy=true;
+  try{await csRunPool(tasks,4);}finally{csVolSplitBusy=false;}
+  const st=document.getElementById('csVolSplitStatus'); if(st)st.textContent=failed?`${failed} of ${total} product requests failed; those are counted under Other`:'';
+}
+async function setCsVolSplit(checked){
+  csVolSplitOn=!!checked;
+  if(csVolSplitOn)await csEnsureSplit();
+  else{const st=document.getElementById('csVolSplitStatus');if(st)st.textContent='';}
+  if(csVolLastData)renderCsVolChart(csVolLastData,csVolLastSubData,csVolLastForecast);
+}
+// thin bars inside each bar (one per product), full width of the bar, heights = that product's own volume
+function csBuildNest(allPeriods,subMap,completedMap){
+  const ctx=csVolCtx; csVolNest=null;
+  if(!csVolSplitOn||!ctx)return null;
+  const get=(w,ep,pr)=>{const d=csVolSplitCache[`${w}|${pr}|${ep}`];return new Map((d?.periods||[]).map(x=>[x.period,x.volume]));};
+  const sum=a=>a.reduce((x,y)=>x+y,0);
+  const rows=ctx.products.map(pr=>{
+    const c1=get('sel','volume',pr),c2=get('prior','volume',pr),s1=get('sel','volume/submitted',pr),s2=get('prior','volume/submitted',pr);
+    const com=allPeriods.map(p=>c1.has(p)?c1.get(p):(c2.get(p)||0)), sub=allPeriods.map(p=>s1.has(p)?s1.get(p):(s2.get(p)||0));
+    return{name:pr,com,sub,total:sum(com)+sum(sub)};
+  }).filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
+  if(rows.length<2)return null;
+  const many=rows.length>6, shown=many?rows.slice(0,5):rows;
+  const types=shown.map((r,i)=>({name:r.name,color:RPT_TYPE_PALETTE[i%RPT_TYPE_PALETTE.length]}));
+  const subSeries=shown.map(r=>r.sub), comSeries=shown.map(r=>r.com);
+  // everything not shown (products beyond the top 5, or a product whose request failed) = the period's total minus what is shown
+  const otherSub=allPeriods.map((p,i)=>Math.max(0,(subMap.get(p)||0)-sum(shown.map(r=>r.sub[i]))));
+  const otherCom=allPeriods.map((p,i)=>Math.max(0,(completedMap.get(p)||0)-sum(shown.map(r=>r.com[i]))));
+  if(sum(otherSub)+sum(otherCom)>0){types.push({name:'Other products',color:'#B8C2CC'});subSeries.push(otherSub);comSeries.push(otherCom);}
+  csVolNest={types,series:[subSeries,comSeries],labels:allPeriods};
+  return csVolNest;
+}
+const csVolNestPlugin={
+  id:'csVolNest',
+  afterDatasetsDraw(chart){
+    const n=csVolNest; if(!n||chart!==csVolChart_)return;
+    const {ctx,scales:{y}}=chart; const base=y.getPixelForValue(0);
+    chart.data.datasets.forEach((ds,di)=>{
+      if(di>1)return; const meta=chart.getDatasetMeta(di); if(meta.hidden)return;
+      meta.data.forEach((bar,i)=>{
+        if(!(ds.data[i]>0))return;
+        const w=bar.width,left=bar.x-w/2,cnt=n.types.length,gap=1.5,iw=(w-gap*(cnt-1))/cnt;
+        const faded=csVolPriorFlags&&csVolPriorFlags[i];
+        n.types.forEach((t,k)=>{
+          const v=(n.series[di][k]||[])[i]||0; if(v<=0)return;
+          const yTop=y.getPixelForValue(v),x0=left+k*(iw+gap);
+          ctx.save();ctx.globalAlpha=faded?0.55:1;ctx.fillStyle=t.color;ctx.fillRect(x0,yTop,iw,base-yTop);
+          if(iw>=15&&(base-yTop)>=14){ctx.fillStyle=di===0?'#1f2933':'#ffffff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(v,x0+iw/2,yTop-3);}
+          ctx.restore();
+        });
+      });
+    });
+  }
+};
+Chart.register(csVolNestPlugin);
+function csVolTooltip(){
+  if(!csVolNest)return{};
+  return{callbacks:{afterBody:items=>{const it=items[0];if(!it||!csVolNest||it.datasetIndex>1)return [];const k=it.dataIndex;return csVolNest.types.map((t,j)=>`${t.name}: ${(csVolNest.series[it.datasetIndex][j]||[])[k]||0}`);}}};
+}
+function csRenderSplitLegend(){
+  const el=document.getElementById('csVolTypeLegend'); if(!el)return;
+  if(csVolNest){el.style.display='flex';el.innerHTML='<b>Products:</b> '+csVolNest.types.map(t=>`<span><i style="background:${t.color}"></i>${esc(t.name)}</span>`).join('');}
+  else{el.style.display='none';el.innerHTML='';}
+}
+async function setCsVolPrev(checked){
+  csVolShowPrev=!!checked;
+  if(csVolSplitOn&&csVolShowPrev)await csEnsureSplit();       // the split for the earlier months is fetched the first time they are shown
+  if(csVolLastData)renderCsVolChart(csVolLastData,csVolLastSubData,csVolLastForecast);
+}
+const csVolPriorBand={
+  id:'csVolPriorBand',
+  beforeDatasetsDraw(chart){
+    const fl=csVolPriorFlags; if(!fl||chart!==csVolChart_||!fl.some(Boolean))return;
+    const {ctx,chartArea:a,scales:{x}}=chart, n=fl.length;
+    const step=n>1?(x.getPixelForValue(1)-x.getPixelForValue(0)):a.width;
+    const first=fl.indexOf(true), last=fl.lastIndexOf(true);
+    const x0=x.getPixelForValue(first)-step/2, x1=x.getPixelForValue(last)+step/2;
+    ctx.save(); ctx.fillStyle='rgba(148,163,184,0.14)'; ctx.fillRect(x0,a.top,x1-x0,a.bottom-a.top);
+    ctx.fillStyle='#64748b'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('PREVIOUS 3 MONTHS',(x0+x1)/2,a.top+10); ctx.restore();
+  }
+};
+Chart.register(csVolPriorBand);
 async function loadCamstarVolume(){
   document.getElementById('cs-vol-total').innerHTML='<span class="dot-spinner"><span></span><span></span><span></span></span>';
   const el=document.getElementById('csVolEmpty');if(el)el.style.display='none';
   document.getElementById('csVolWrap').style.display='block';
   try{
     const qs = csParams(csGranularity);
-    const[res,subRes]=await Promise.all([
+    const fromVal=document.getElementById('cs-date-from')?.value;
+    const pw=fromVal?rptVolPriorWindows(fromVal):null;                      // the 3 months before the selected period
+    const pqs=pw?csParams(csGranularity,{from:pw.from,to:(csGranularity==='weekly'?pw.toWeekly:pw.toMonthly)}):null;
+    const prevChk=document.getElementById('csVolPrevChk'), prevWrap=document.getElementById('csVolPrevWrap');
+    if(prevChk)prevChk.disabled=!pw;
+    if(prevWrap){prevWrap.classList.toggle('disabled',!pw);prevWrap.title=pw?'Also shows the 3 months before the selected period':'Pick a date range to use this';}
+    csVolShowPrev=!!(pw&&prevChk&&prevChk.checked);
+    csVolCtx={qs,pqs,products:csSplitProducts()}; csVolSplitCache={};
+    const splitChk=document.getElementById('csVolSplitChk'), splitWrap=document.getElementById('csVolSplitWrap');
+    const canSplit=csVolCtx.products.length>=2;
+    if(splitChk)splitChk.disabled=!canSplit;
+    if(splitWrap){splitWrap.classList.toggle('disabled',!canSplit);splitWrap.title=canSplit?'Thin bars inside each bar, one per product line':'Choose a product group (or All) to split by product';}
+    csVolSplitOn=!!(canSplit&&splitChk&&splitChk.checked);
+    const[res,subRes,pRes,pSubRes]=await Promise.all([
       fetch(`${API}/analytics/camstar/volume?${qs}`),
       fetch(`${API}/analytics/camstar/volume/submitted?${qs}`).catch(()=>null),
+      pqs?fetch(`${API}/analytics/camstar/volume?${pqs}`).catch(()=>null):Promise.resolve(null),
+      pqs?fetch(`${API}/analytics/camstar/volume/submitted?${pqs}`).catch(()=>null):Promise.resolve(null),
     ]);
     const data=await res.json();
     const subData = subRes?.ok ? await subRes.json() : null;
+    csVolPrior = pw ? {completed:(pRes?.ok?await pRes.json().catch(()=>null):null), submitted:(pSubRes?.ok?await pSubRes.json().catch(()=>null):null)} : null;
     if(data.error){toast(data.error,'err');document.getElementById('cs-vol-total').textContent='Error';return;}
     document.getElementById('cs-vol-total').textContent=data.total_volume?.toLocaleString()||'0';
     document.getElementById('cs-vol-sub').textContent=`${data.periods?.length||0} periods · ${csGranularity}${subData?` · ${subData.total_volume?.toLocaleString()||0} submitted`:''}`;
@@ -2378,6 +2622,7 @@ async function loadCamstarVolume(){
     csVolLastForecast = await fetchCsForecast(csGranularity);
     csVolLastData = data; csVolLastSubData = subData;
     renderCsVolChart(data, subData, csVolLastForecast);
+    if(csVolSplitOn){await csEnsureSplit();renderCsVolChart(data, subData, csVolLastForecast);}      // the split is drawn as soon as its data is in
   }catch(e){toast('CamStar volume error','err');}
 }
 function renderCsVolChart(data, subData, forecastData){
@@ -2388,8 +2633,19 @@ function renderCsVolChart(data, subData, forecastData){
   if(!periods.length)return;
   const s=getRptChartSettings('csVolChart');
   const subMap = new Map((subData?.periods||[]).map(p=>[p.period,p.volume]));
-  const allPeriods = [...new Set([...periods.map(p=>p.period), ...subMap.keys()])].sort();
+  const selPeriods = [...new Set([...periods.map(p=>p.period), ...subMap.keys()])].sort();
   const completedMap = new Map(periods.map(p=>[p.period,p.volume]));
+  // previous 3 months: periods that only exist in the earlier window (the selected window always wins)
+  const selSet = new Set(selPeriods), priorSet = new Set();
+  if(csVolShowPrev && csVolPrior){
+    (csVolPrior.completed?.periods||[]).forEach(p=>{if(!selSet.has(p.period)){priorSet.add(p.period);completedMap.set(p.period,p.volume);}});
+    (csVolPrior.submitted?.periods||[]).forEach(p=>{if(!selSet.has(p.period)){priorSet.add(p.period);subMap.set(p.period,p.volume);}});
+  }
+  const allPeriods = [...new Set([...selPeriods, ...priorSet])].sort();
+  const priorFlags = allPeriods.map(p=>priorSet.has(p));
+  csVolPriorFlags = priorFlags.some(Boolean) ? priorFlags : null;
+  const nested = !!csBuildNest(allPeriods, subMap, completedMap);
+  csRenderSplitLegend();
   const ctx=document.getElementById('csVolChart').getContext('2d');
   const csForecastDs = forecastData?.by_month ? {
     label:'Forecast',
@@ -2400,11 +2656,11 @@ function renderCsVolChart(data, subData, forecastData){
   csVolChart_=new Chart(ctx,{
     type:'bar',
     data:{labels:allPeriods,datasets:[
-      {label:'Submitted (entered queue)',data:allPeriods.map(p=>subMap.get(p)||0),backgroundColor:s.color+'cc',borderColor:s.color,borderWidth:1,borderRadius:4,barPercentage:s.barWidth/100},
-      {label:'Completed',data:allPeriods.map(p=>completedMap.get(p)||0),backgroundColor:s.color2+'cc',borderColor:s.color2,borderWidth:1,borderRadius:4,barPercentage:s.barWidth/100},
+      {label:'Submitted (entered queue)',data:allPeriods.map(p=>subMap.get(p)||0),backgroundColor:c=>s.color+(priorFlags[c.dataIndex]?(nested?'28':'55'):(nested?'55':'cc')),borderColor:s.color,borderWidth:1,borderRadius:4,barPercentage:s.barWidth/100},
+      {label:'Completed',data:allPeriods.map(p=>completedMap.get(p)||0),backgroundColor:c=>s.color2+(priorFlags[c.dataIndex]?'66':'cc'),borderColor:s.color2,borderWidth:1,borderRadius:4,barPercentage:s.barWidth/100},
       ...(csForecastDs?[csForecastDs]:[])
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:s.showLegend},datalabels:s.showLabels?{color:'#374151',font:{size:s.dlSize,weight:'600'},anchor:'end',align:'top',formatter:v=>v>0?v:''}:{display:false}},scales:{y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?undefined:Number(s.yMax),title:{display:true,text:'Cases',font:{size:s.tickSize},color:'#374151'},ticks:{color:'#111827',font:{size:s.tickSize}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:s.tickSize},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:s.showLegend},tooltip:csVolTooltip(),datalabels:s.showLabels?{color:'#374151',font:{size:s.dlSize,weight:'600'},anchor:'end',align:'top',formatter:v=>v>0?v:''}:{display:false}},scales:{y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?undefined:Number(s.yMax),title:{display:true,text:'Cases',font:{size:s.tickSize},color:'#374151'},ticks:{color:'#111827',font:{size:s.tickSize}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:s.tickSize},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
   });
 }
 
@@ -3986,7 +4242,7 @@ const RPT_CHART_DEFS = {
   csVolChart:      {color:'#4EA8B8', color2:'#005F72', type:'bar',  barWidth:70, dlSize:10, tickSize:10, yMin:'', yMax:'', showLabels:true,  showLegend:true},
   csWipTrendChart: {color:'#005F72', color2:'#7C3AED', type:'line', barWidth:70, dlSize:10, tickSize:10, yMin:'', yMax:'', showLabels:false, showLegend:true},
   csProcessChart:  {color:'#005F72', color2:'#005F72', type:'bar',  barWidth:70, dlSize:11, tickSize:11, yMin:'', yMax:'', showLabels:true,  showLegend:false},
-  csLtChart:       {color:'#7C3AED', color2:'#7C3AED', type:'bar',  barWidth:70, dlSize:11, tickSize:11, yMin:'', yMax:'', showLabels:true,  showLegend:false},
+  csLtChart:       {color:'#7C3AED', color2:'#7C3AED', type:'line', barWidth:70, dlSize:11, tickSize:11, yMin:'', yMax:'', showLabels:true,  showLegend:false},
   csUtilChart:     {color:'#005F72', color2:'#005F72', type:'bar',  barWidth:70, dlSize:12, tickSize:12, yMin:'', yMax:'', showLabels:false, showLegend:true},
   csFpyChart:      {color:'#16a34a', color2:'#16a34a', type:'bar',  barWidth:70, dlSize:12, tickSize:12, yMin:'', yMax:105, showLabels:false, showLegend:true},
   csOtdChart:      {color:'#16a34a', color2:'#E05A4E', type:'doughnut', barWidth:65, dlSize:13, tickSize:10, yMin:'', yMax:'', showLabels:true, showLegend:true},
@@ -4736,7 +4992,7 @@ function rptPspUpdateNotice(){
   const box=document.getElementById('rptPspNotice'), txt=document.getElementById('rptPspNoticeTxt'); if(!box)return;
   const n=SEL.rptPspUser?.length||0;
   box.style.display=n?'block':'none';
-  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): volume, process counts, lead time, first pass yield and on-time delivery only count cases they signed off the plan for (submitted volume therefore leaves out cases not yet signed off). The WIP tiles and the WIP trend ignore this filter, because work in progress has no plan sign-off yet.`;
+  if(n&&txt)txt.textContent=`Surgical Plan User filter active (${n} reviewer${n>1?'s':''}): completed cases, lead time by step, on-time delivery, the lead time trend and the total / digital / surgeon lead time KPIs only count cases they signed off the plan for. Submitted scans, completed cases per process, first pass yield, queue time and everything WIP are not filtered, because those include work that has not reached plan sign-off yet.`;
 }
 async function rptPspPrune(){ if(SEL.rptPspUser?.length)await loadRptPspUsers(true); }
 
