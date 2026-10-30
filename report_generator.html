@@ -1307,10 +1307,13 @@
               <button class="chart-toggle" onclick="setCsFpyGranularity('weekly',this);loadCamstarFpy()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsFpyGranularity('monthly',this);loadCamstarFpy()">Monthly</button>
               <label class="vol-prev" id="csFpyPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csFpyPrevChk" onchange="setCsFpyPrev(this.checked)"/> Show previous 3 months</label>
+              <label class="vol-prev" id="csFpySmoothWrap" style="margin-left:12px" title="Rolling FPY: all passed cases divided by all cases over the last few periods, so a small week cannot drag the line down on its own"><input type="checkbox" id="csFpySmoothChk" checked onchange="setCsFpySmooth(this.checked)"/> Rolling average</label>
+              <label class="vol-prev" id="csFpyVolWrap" style="margin-left:12px" title="Grey bars = how many cases each period had (right axis)"><input type="checkbox" id="csFpyVolChk" onchange="setCsFpyVol(this.checked)"/> Show case volume</label>
               <button class="kpi-calc-btn" id="csFpyFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('fpy')"><i class="fa fa-list"></i> View Cases</button>
             </div>
             <div id="csFpyEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csFpyWrap" style="display:none"></div>
+            <div class="logic-caption" id="csFpyCaption"></div>
           </div>
 
           <!-- OTD chart -->
@@ -2774,13 +2777,18 @@ function renderCsUtilChart(data){
 
 // ── CAMSTAR FPY ──
 // Previous 3 months (Trend view): fetched with the report, redrawn instantly by the checkbox.
-let csFpyShowPrev=false, csFpyPrior=null, csFpyPriorFlags=null, csFpyWindowOk=false;
+let csFpyShowPrev=false, csFpyPrior=null, csFpyPriorFlags=null, csFpyWindowOk=false, csFpySmooth=true, csFpyVol=false;
 function csFpySyncPrevUi(){
   const chk=document.getElementById('csFpyPrevChk'), wrap=document.getElementById('csFpyPrevWrap'); if(!chk||!wrap)return;
   const can=csFpyWindowOk&&csFpyView_==='trend';
   chk.disabled=!can; wrap.classList.toggle('disabled',!can);
   wrap.title=can?'Also shows the 3 months before the selected period':(csFpyView_!=='trend'?'Available in the Trend view':'Pick a date range to use this');
+  const trend=csFpyView_==='trend';
+  ['csFpySmooth','csFpyVol'].forEach(id=>{const c=document.getElementById(id+'Chk'),w=document.getElementById(id+'Wrap'); if(c)c.disabled=!trend; if(w)w.classList.toggle('disabled',!trend);});
+  if(!trend){const cap=document.getElementById('csFpyCaption'); if(cap)cap.innerHTML='';}
 }
+function setCsFpySmooth(c){ csFpySmooth=!!c; if(lastCsFpyData)renderCsFpyChart(lastCsFpyData); }
+function setCsFpyVol(c){ csFpyVol=!!c; if(lastCsFpyData)renderCsFpyChart(lastCsFpyData); }
 function setCsFpyPrev(c){ csFpyShowPrev=!!c; if(lastCsFpyData)renderCsFpyChart(lastCsFpyData); }
 const csFpyPriorBand={
   id:'csFpyPriorBand',
@@ -2804,6 +2812,7 @@ async function loadCamstarFpy(){
     const pw=fromVal?rptVolPriorWindows(fromVal):null;                      // the 3 months before the selected period
     const pqs=pw?csParams(csFpyGranularity_,{from:pw.from,to:(csFpyGranularity_==='weekly'?pw.toWeekly:pw.toMonthly)}):null;
     csFpyWindowOk=!!pw; csFpyShowPrev=!!(pw&&document.getElementById('csFpyPrevChk')?.checked);
+    { const sm=document.getElementById('csFpySmoothChk'), vo=document.getElementById('csFpyVolChk'); csFpySmooth=!sm||sm.checked; csFpyVol=!!(vo&&vo.checked); }
     const[res,pRes]=await Promise.all([
       fetch(`${API}/analytics/camstar/fpy?${csParams(csFpyGranularity_)}`),
       pqs?fetch(`${API}/analytics/camstar/fpy?${pqs}`).catch(()=>null):Promise.resolve(null),
@@ -2861,10 +2870,37 @@ function renderCsFpyChart(data){
     const counts=labels.map(l=>`${byP.get(l).passed}/${byP.get(l).total} cases`);
     const flags=labels.map(l=>priorSet.has(l)); csFpyPriorFlags=flags.some(Boolean)?flags:null;
     const fpyTrendAvg={label:'Avg: '+data.team_avg+'%',data:labels.map(l=>priorSet.has(l)?null:data.team_avg),borderColor:s.color,borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,datalabels:{display:false}};
+    // ── why the line dips, and a steadier line ──
+    // FPY of one period = passed / total cases of that period, so a period with only a few cases swings hard (1 failed case out of 3 = 67 %).
+    // 1) small periods (fewer than half the typical number of cases) get hollow orange points; 2) a rolling line (all passed / all cases over the
+    // last 4 weeks or 3 months, weighted by volume) is not thrown by one small period; 3) optional grey bars show the volume behind every point.
+    const unit=csFpyGranularity_==='weekly'?'week':'month', K=unit==='week'?4:3;
+    const known=new Map(periods.map(p=>[p.period,p]));
+    if(csFpyWindowOk&&Array.isArray(csFpyPrior?.periods))csFpyPrior.periods.forEach(p=>{if(!known.has(p.period))known.set(p.period,p);});   // earlier periods feed the rolling line even when they are not drawn
+    const order=[...known.keys()].sort(), roll=new Map();
+    order.forEach((key,i)=>{let pas=0,tot=0;for(let j=Math.max(0,i-K+1);j<=i;j++){const q=known.get(order[j]);pas+=Number(q.passed)||0;tot+=Number(q.total)||0;}roll.set(key,tot>0?pas/tot*100:null);});
+    const rolling=labels.map(l=>{const v=roll.get(l);return v==null?null:+v.toFixed(1);});
+    const totals=labels.map(l=>Number(byP.get(l).total)||0), passedN=labels.map(l=>Number(byP.get(l).passed)||0);
+    const pos=totals.filter(t=>t>0).sort((a,b)=>a-b), typical=pos.length?pos[Math.floor(pos.length/2)]:0;
+    const low=totals.map(t=>typical>0&&t<0.5*typical);
+    const dips=labels.map((l,i)=>({l,i})).filter(o=>vals[o.i]!=null&&totals[o.i]>0&&vals[o.i]<(Number(data.team_avg)||0)-15).sort((a,b)=>vals[a.i]-vals[b.i]).slice(0,4);
+    const cap=document.getElementById('csFpyCaption');
+    if(cap){
+      const lowN=low.filter(Boolean).length;
+      cap.innerHTML='FPY of a '+unit+' = cases that passed first time ÷ cases that '+unit+'. '
+        +(csFpySmooth?`The dark line is the rolling FPY over the last ${K} ${unit}s (all passed ÷ all cases), so one small ${unit} cannot drag it down. `:'')
+        +(lowN?'Hollow orange points are '+unit+'s with fewer than half the usual '+(typical)+' cases. ':'')
+        +(dips.length?'<br><b>Dips:</b> '+dips.map(o=>`${esc(o.l)} ${vals[o.i]}% (${passedN[o.i]} of ${totals[o.i]} cases${low[o.i]?', a small '+unit+' of its own':', normal volume: a real quality dip'})`).join(' · '):'');
+    }
+    const rollDs=csFpySmooth?{label:`Rolling ${K}-${unit} FPY`,data:rolling,borderColor:'#0b5d3b',backgroundColor:'#0b5d3b',borderWidth:3.5,pointRadius:0,fill:false,tension:0.35,cubicInterpolationMode:'monotone',spanGaps:true,order:0,datalabels:{display:false}}:null;
+    const volDs=csFpyVol?{type:'bar',label:'Cases (right axis)',data:totals,yAxisID:'y1',backgroundColor:flags.map(f=>f?'rgba(148,163,184,0.18)':'rgba(148,163,184,0.38)'),borderWidth:0,barPercentage:0.6,order:5,datalabels:{display:false}}:null;
+    const rawStyle=csFpySmooth;                 // with the rolling line on, the raw weekly line steps back
     csFpyChart_=new Chart(ctx,{
       type:'line',
-      data:{labels,datasets:[{label:'FPY %',data:vals,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.1)',fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:flags.map(f=>f?'rgba(22,163,74,0.45)':'#16a34a'),segment:{borderColor:c=>flags[c.p1DataIndex]?'rgba(22,163,74,0.45)':undefined}},fpyTrendAvg]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:s.showLegend,labels:{filter:item=>item.text.includes('Avg'),font:{size:12}}},datalabels:{display:false},tooltip:{callbacks:{afterLabel:ctx=>ctx.datasetIndex===0?counts[ctx.dataIndex]:''}}},scales:{y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?105:Number(s.yMax),title:{display:true,text:'FPY %',color:'#374151'},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:12},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
+      data:{labels,datasets:[{label:'FPY %',data:vals,borderColor:rawStyle?'rgba(22,163,74,0.50)':'#16a34a',backgroundColor:rawStyle?'rgba(22,163,74,0.05)':'rgba(22,163,74,0.1)',fill:true,tension:0.3,borderWidth:rawStyle?1.5:3,
+        pointRadius:low.map(l=>l?5.5:3),pointBorderWidth:low.map(l=>l?2:1),pointBorderColor:low.map(l=>l?'#f59e0b':(rawStyle?'rgba(22,163,74,0.5)':'#16a34a')),
+        pointBackgroundColor:low.map((l,i)=>l?'#ffffff':(flags[i]?'rgba(22,163,74,0.45)':'#16a34a')),segment:{borderColor:c=>flags[c.p1DataIndex]?'rgba(22,163,74,0.30)':undefined}},fpyTrendAvg,...(rollDs?[rollDs]:[]),...(volDs?[volDs]:[])]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:s.showLegend,labels:{filter:item=>/Avg|Rolling|Cases/.test(item.text),font:{size:12}}},datalabels:{display:false},tooltip:{callbacks:{afterLabel:ctx=>ctx.datasetIndex===0?(counts[ctx.dataIndex]+(low[ctx.dataIndex]?' · small '+unit+' (usual '+typical+')':'')):(rollDs&&ctx.datasetIndex===2?'passed ÷ total over the last '+K+' '+unit+'s':'')}}},scales:{...(volDs?{y1:{position:'right',beginAtZero:true,suggestedMax:Math.max(1,...totals)*3.2,grid:{drawOnChartArea:false},title:{display:true,text:'Cases',font:{size:10},color:'#64748b'},ticks:{font:{size:10},color:'#64748b'}}}:{}),y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?105:Number(s.yMax),title:{display:true,text:'FPY %',color:'#374151'},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:12},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
     });
   }
 }
