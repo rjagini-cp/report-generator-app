@@ -503,6 +503,7 @@
 #rptCard_dplt{display:flex;flex-direction:column;height:360px;box-sizing:border-box;overflow:hidden;margin-bottom:0}
 #rptCard_dplt .rpt-chart-wrap{flex:1 1 auto;min-height:0;height:auto;position:relative}
 #rptCard_dplt .logic-caption{font-size:9px;line-height:1.35;margin-top:4px}
+#csLtWrap{height:340px !important}
 </style>
 </head>
 <body>
@@ -1243,6 +1244,7 @@
               <button class="chart-toggle" id="csLtWeeklyBtn" onclick="setCsLtGran('weekly')">Weekly</button>
               <button class="chart-toggle active" id="csLtMonthlyBtn" onclick="setCsLtGran('monthly')">Monthly</button>
               <label class="vol-prev" id="csLtPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csLtPrevChk" checked onchange="setCsLtPrev(this.checked)"/> Show previous 3 months</label>
+              <label class="vol-prev" id="csLtLinesWrap" style="margin-left:12px" title="Adds one line per product line"><input type="checkbox" id="csLtLinesChk" onchange="setCsLtLines(this.checked)"/> Show product lines</label>
               <span id="csLtStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
             </div>
             <div id="csLtEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
@@ -1302,6 +1304,7 @@
               <button class="chart-toggle" onclick="setCsFpyView('step',this)">By Process</button>
               <button class="chart-toggle" onclick="setCsFpyGranularity('weekly',this);loadCamstarFpy()">Weekly</button>
               <button class="chart-toggle active" onclick="setCsFpyGranularity('monthly',this);loadCamstarFpy()">Monthly</button>
+              <label class="vol-prev" id="csFpyPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csFpyPrevChk" onchange="setCsFpyPrev(this.checked)"/> Show previous 3 months</label>
               <button class="kpi-calc-btn" id="csFpyFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('fpy')"><i class="fa fa-list"></i> View Cases</button>
             </div>
             <div id="csFpyEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
@@ -2009,7 +2012,7 @@ let lastCsFpyData=null;
 function setCsGranularity(g,btn){csGranularity=g;btn.closest('.chart-controls').querySelectorAll('.chart-toggle').forEach((b,i)=>{if(i<2)b.classList.remove('active');});btn.classList.add('active');}
 function setCsUtilGranularity(g,btn){csUtilGranularity_=g;btn.closest('.chart-controls').querySelectorAll('.chart-toggle').forEach((b,i)=>{if(i<2)b.classList.remove('active');});btn.classList.add('active');}
 function setCsFpyGranularity(g,btn){csFpyGranularity_=g;const ctrls=btn.closest('.chart-controls');[...ctrls.querySelectorAll('.chart-toggle')].slice(3).forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
-function setCsFpyView(v,btn){csFpyView_=v;const ctrls=btn.closest('.chart-controls');[...ctrls.querySelectorAll('.chart-toggle')].slice(0,3).forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(lastCsFpyData)renderCsFpyChart(lastCsFpyData);}
+function setCsFpyView(v,btn){csFpyView_=v;if(typeof csFpySyncPrevUi==='function')csFpySyncPrevUi();const ctrls=btn.closest('.chart-controls');[...ctrls.querySelectorAll('.chart-toggle')].slice(0,3).forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(lastCsFpyData)renderCsFpyChart(lastCsFpyData);}
 
 async function onCsTeamChange(){
   const team=document.getElementById('cs-team').value;
@@ -2312,6 +2315,7 @@ function renderCsProcessChart(data){
     });
 }
 
+let csLtShowLines=false;
 let csLtLastData=null, csLtGran='monthly', csLtShowPrev=true, csLtCache={}, csLtCtx=null, csLtVisible={}, csLtPriorFlags=null;
 const CS_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const CS_COUNT_KEYS=['order_count','orders','n_orders','total_orders','order_cnt','count','n','cases','case_count','total'];   // used to weight the all-products line when the endpoint reports order counts
@@ -2385,6 +2389,7 @@ async function loadCsLtByStep(){
   const el=document.getElementById('csLtEmpty'); if(el) el.style.display='none';
   try{
     csLtCtx={id:Date.now()}; csLtCache={}; csLtLastData=null;
+    const linesChk=document.getElementById('csLtLinesChk'); csLtShowLines=!!(linesChk&&linesChk.checked);
     const chk=document.getElementById('csLtPrevChk'); csLtShowPrev=!chk||chk.checked;
     csLtSyncToggles();
     await csLtEnsure(csLtGran);
@@ -2401,6 +2406,7 @@ async function setCsLtGran(g){
   if(!csLtCtx)return;                                   // nothing generated yet: the choice is used by the next Generate
   await csLtEnsure(g); csLtLastData={gran:g}; renderCsLtChart();
 }
+function setCsLtLines(c){ csLtShowLines=!!c; if(csLtCtx&&csLtLastData)renderCsLtChart(); }
 async function setCsLtPrev(c){
   csLtShowPrev=!!c;
   if(!csLtCtx)return;
@@ -2430,10 +2436,13 @@ function renderCsLtChart(){
   // which product lines are drawn by default: the 6 with the most orders (or the longest lead time when counts are not reported); the legend toggles the rest
   const rank=fam.map((f,i)=>({f,i,score:weighted?rows.reduce((a,r)=>a+(r.counts[i]||0),0):rows.reduce((a,r)=>a+(r.vals[i]||0),0)/Math.max(1,rows.filter(r=>r.vals[i]!=null).length)})).sort((a,b)=>b.score-a.score);
   const topSet=new Set(rank.slice(0,6).map(x=>x.f)), single=fam.length===1;
+  const showLines=csLtShowLines&&!single;                      // product lines are drawn only when the box is ticked
+  const lk=document.getElementById('csLtLinesChk'), lw=document.getElementById('csLtLinesWrap');
+  if(lk)lk.disabled=single; if(lw){lw.classList.toggle('disabled',single);lw.title=single?'Only one product line in this selection':'Adds one line per product line';}
   const smooth={tension:0.35,cubicInterpolationMode:'monotone',spanGaps:true};
-  const ds=[{label:weighted?'All products (weighted by orders)':'All products (simple average)',data:rows.map(r=>r.overall!=null?+r.overall.toFixed(2):null),borderColor:s.color,backgroundColor:s.color,borderWidth:3,pointRadius:rows.map(r=>r.selected?4.5:3),pointBackgroundColor:s.color,pointBorderColor:'#fff',pointBorderWidth:1.5,order:1,hidden:single?true:(csLtVisible['__all']===false),_all:true,...smooth,
+  const ds=[{label:single?fam[0]:(weighted?'All products (weighted by orders)':'All products (simple average)'),data:rows.map(r=>r.overall!=null?+r.overall.toFixed(2):null),borderColor:s.color,backgroundColor:s.color,borderWidth:3,pointRadius:rows.map(r=>r.selected?4.5:3),pointBackgroundColor:s.color,pointBorderColor:'#fff',pointBorderWidth:1.5,order:1,hidden:single?false:(csLtVisible['__all']===false),_all:true,...smooth,
     datalabels:s.showLabels?{display:c=>c.dataset.data[c.dataIndex]!=null,anchor:'end',align:'top',offset:4,color:'#1f2933',font:{size:s.dlSize,weight:'700'},formatter:v=>v==null?'':v.toFixed(1)}:{display:false}}];
-  fam.forEach((f,i)=>{const col=RPT_TYPE_PALETTE[i%RPT_TYPE_PALETTE.length];
+  if(showLines)fam.forEach((f,i)=>{const col=RPT_TYPE_PALETTE[i%RPT_TYPE_PALETTE.length];
     ds.push({label:f,data:rows.map(r=>r.vals[i]!=null?+r.vals[i].toFixed(2):null),borderColor:col,backgroundColor:col,borderWidth:1.8,pointRadius:2.5,order:2,hidden:csLtVisible[f]!==undefined?!csLtVisible[f]:!(single||topSet.has(f)),_fi:i,...smooth,datalabels:{display:false}});});
   window._csLtInst=new Chart(document.getElementById('csLtChart').getContext('2d'),{type:'line',data:{labels,datasets:ds},
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20,right:10}},interaction:{mode:'index',intersect:false},
@@ -2447,7 +2456,7 @@ function renderCsLtChart(){
   const cap=document.getElementById('csLtCaption');
   if(cap)cap.textContent=`Average days from order entry (first transaction) to final step (last transaction), per product line, for each ${csLtGran==='weekly'?'week':'month'}. `
     +(weighted?'The All products line weights each product line by its number of orders. ':'The All products line is the simple average of the product lines that period (the service does not report order counts). ')
-    +'The shaded band is the 3 months before the selected period. Click a product in the legend to show or hide its line.';
+    +'The shaded band is the 3 months before the selected period. '+(showLines?'Click a product in the legend to show or hide its line.':'Tick "Show product lines" to see each product line.');
 }
 
 async function fetchCsCases(type){
@@ -2496,7 +2505,7 @@ async function csEnsureSplit(){
   windows.forEach(([w,base])=>ctx.products.forEach(pr=>['volume','volume/submitted'].forEach(ep=>{
     const key=`${w}|${pr}|${ep}`; if(csVolSplitCache[key]!==undefined)return; total++;
     tasks.push(async()=>{
-      try{const q=new URLSearchParams(base); q.set('product',pr);
+      try{const q=new URLSearchParams(base); q.delete('product_group'); q.set('product',pr);     // the service unions group + product, so the group must not be sent
         const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),25000);
         const r=await fetch(`${API}/analytics/camstar/${ep}?${q.toString()}`,{signal:ctl.signal}); clearTimeout(to);
         csVolSplitCache[key]=r.ok?await r.json():null; if(!r.ok)failed++;
@@ -2745,13 +2754,44 @@ function renderCsUtilChart(data){
 }
 
 // ── CAMSTAR FPY ──
+// Previous 3 months (Trend view): fetched with the report, redrawn instantly by the checkbox.
+let csFpyShowPrev=false, csFpyPrior=null, csFpyPriorFlags=null, csFpyWindowOk=false;
+function csFpySyncPrevUi(){
+  const chk=document.getElementById('csFpyPrevChk'), wrap=document.getElementById('csFpyPrevWrap'); if(!chk||!wrap)return;
+  const can=csFpyWindowOk&&csFpyView_==='trend';
+  chk.disabled=!can; wrap.classList.toggle('disabled',!can);
+  wrap.title=can?'Also shows the 3 months before the selected period':(csFpyView_!=='trend'?'Available in the Trend view':'Pick a date range to use this');
+}
+function setCsFpyPrev(c){ csFpyShowPrev=!!c; if(lastCsFpyData)renderCsFpyChart(lastCsFpyData); }
+const csFpyPriorBand={
+  id:'csFpyPriorBand',
+  beforeDatasetsDraw(chart){
+    const fl=csFpyPriorFlags; if(!fl||chart!==csFpyChart_||!fl.some(Boolean))return;
+    const {ctx,chartArea:a,scales:{x}}=chart, n=fl.length;
+    const step=n>1?(x.getPixelForValue(1)-x.getPixelForValue(0)):a.width;
+    const first=fl.indexOf(true), last=fl.lastIndexOf(true);
+    const x0=x.getPixelForValue(first)-step/2, x1=x.getPixelForValue(last)+step/2;
+    ctx.save(); ctx.fillStyle='rgba(148,163,184,0.14)'; ctx.fillRect(x0,a.top,x1-x0,a.bottom-a.top);
+    ctx.fillStyle='#64748b'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center'; ctx.fillText('PREVIOUS 3 MONTHS',(x0+x1)/2,a.top+10); ctx.restore();
+  }
+};
+Chart.register(csFpyPriorBand);
 async function loadCamstarFpy(){
   document.getElementById('cs-fpy-avg').innerHTML='<span class="dot-spinner"><span></span><span></span><span></span></span>';
   const el=document.getElementById('csFpyEmpty');if(el)el.style.display='none';
   document.getElementById('csFpyWrap').style.display='block';
   try{
-    const res=await fetch(`${API}/analytics/camstar/fpy?${csParams(csFpyGranularity_)}`);
+    const fromVal=document.getElementById('cs-date-from')?.value;
+    const pw=fromVal?rptVolPriorWindows(fromVal):null;                      // the 3 months before the selected period
+    const pqs=pw?csParams(csFpyGranularity_,{from:pw.from,to:(csFpyGranularity_==='weekly'?pw.toWeekly:pw.toMonthly)}):null;
+    csFpyWindowOk=!!pw; csFpyShowPrev=!!(pw&&document.getElementById('csFpyPrevChk')?.checked);
+    const[res,pRes]=await Promise.all([
+      fetch(`${API}/analytics/camstar/fpy?${csParams(csFpyGranularity_)}`),
+      pqs?fetch(`${API}/analytics/camstar/fpy?${pqs}`).catch(()=>null):Promise.resolve(null),
+    ]);
     const data=await res.json();
+    csFpyPrior=pw?(pRes?.ok?await pRes.json().catch(()=>null):null):null;
+    csFpySyncPrevUi();
     lastCsFpyData=data;
     if(data.error){toast(data.error,'err');document.getElementById('cs-fpy-avg').textContent='Error';return;}
     document.getElementById('cs-fpy-avg').textContent=data.team_avg+'%';
@@ -2794,13 +2834,17 @@ function renderCsFpyChart(data){
   }else{
     const periods=data.periods||[];
     if(!periods.length)return;
-    const labels=periods.map(p=>p.period);
-    const vals=periods.map(p=>p.fpy);
-    const counts=periods.map(p=>`${p.passed}/${p.total} cases`);
-    const fpyTrendAvg={label:'Avg: '+data.team_avg+'%',data:labels.map(()=>data.team_avg),borderColor:s.color,borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,datalabels:{display:false}};
+    // previous 3 months: periods that only exist in the earlier window (the selected window always wins)
+    const byP=new Map(periods.map(p=>[p.period,p])), priorSet=new Set();
+    if(csFpyShowPrev&&csFpyWindowOk&&Array.isArray(csFpyPrior?.periods))csFpyPrior.periods.forEach(p=>{if(!byP.has(p.period)){byP.set(p.period,p);priorSet.add(p.period);}});
+    const labels=[...byP.keys()].sort();
+    const vals=labels.map(l=>byP.get(l).fpy);
+    const counts=labels.map(l=>`${byP.get(l).passed}/${byP.get(l).total} cases`);
+    const flags=labels.map(l=>priorSet.has(l)); csFpyPriorFlags=flags.some(Boolean)?flags:null;
+    const fpyTrendAvg={label:'Avg: '+data.team_avg+'%',data:labels.map(l=>priorSet.has(l)?null:data.team_avg),borderColor:s.color,borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,datalabels:{display:false}};
     csFpyChart_=new Chart(ctx,{
       type:'line',
-      data:{labels,datasets:[{label:'FPY %',data:vals,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.1)',fill:true,tension:0.3,pointRadius:3},fpyTrendAvg]},
+      data:{labels,datasets:[{label:'FPY %',data:vals,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.1)',fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:flags.map(f=>f?'rgba(22,163,74,0.45)':'#16a34a'),segment:{borderColor:c=>flags[c.p1DataIndex]?'rgba(22,163,74,0.45)':undefined}},fpyTrendAvg]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:s.showLegend,labels:{filter:item=>item.text.includes('Avg'),font:{size:12}}},datalabels:{display:false},tooltip:{callbacks:{afterLabel:ctx=>ctx.datasetIndex===0?counts[ctx.dataIndex]:''}}},scales:{y:{beginAtZero:true,min:s.yMin===''?undefined:Number(s.yMin),max:s.yMax===''?105:Number(s.yMax),title:{display:true,text:'FPY %',color:'#374151'},ticks:{color:'#111827',font:{size:12}},grid:{color:'#e5e7eb'},border:{color:'#374151'}},x:{ticks:{maxRotation:45,font:{size:12},color:'#111827'},grid:{color:'#e5e7eb'},border:{color:'#374151'}}}}
     });
   }
