@@ -3236,6 +3236,15 @@ def camstar_breakdown_fixation_proxy():
     return _camstar_proxy("/analytics/camstar/breakdown/fixation")
 
 
+# ── Camstar tower views (Lead Time / OTD by product line or by category) ──
+# One request returns every bar of the "By product line" / "By category" views. Same explicit-whitelist
+# pattern as the routes above; the whole query string is forwarded to camstar-app untouched.
+
+@app.route("/analytics/camstar/compare", methods=["GET"])
+def camstar_compare_proxy():
+    return _camstar_proxy("/analytics/camstar/compare")
+
+
 # ══════════════════════════════════════════════════════════════
 #  GROUPED LEAD TIME ENGINE (shoulder & ankle)
 #  + NEW ON-TIME DELIVERY  + SURGICAL PLAN USER OPTIONS
