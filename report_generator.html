@@ -1250,7 +1250,7 @@
               <button class="chart-toggle active" id="csLtMonthlyBtn" onclick="setCsLtGran('monthly')">Monthly</button>
               <label class="vol-prev" id="csLtPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csLtPrevChk" checked onchange="setCsLtPrev(this.checked)"/> Show previous 3 months</label>
               <label class="vol-prev" id="csLtLinesWrap" style="margin-left:12px" title="Adds one line per product line"><input type="checkbox" id="csLtLinesChk" onchange="setCsLtLines(this.checked)"/> Show product lines</label>
-              <select id="csLtSegment" onchange="onCsLtSegmentChange()" title="Show only one kind of case. MA and KA apply to Identity CR cases only." aria-label="Segment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px"><option value="ALL" selected>ALL</option><option value="MA">MA</option><option value="KA">KA</option><option value="Porous">Porous</option><option value="Cemented">Cemented</option><option value="Dragon">Dragon</option></select><span id="csLtStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
+              <span id="csLtSegGrp" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap"><select id="csLtSegJigs" data-dim="jigs" onchange="onCsLtSegmentChange()" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Jigs" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Jigs: all</option><option value="standard">Jigs: Standard</option><option value="dragon">Jigs: Dragon</option></select><select id="csLtSegAlign" data-dim="alignment" onchange="onCsLtSegmentChange()" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Alignment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Alignment: all</option><option value="ma">Alignment: MA</option><option value="ka">Alignment: KA</option></select><select id="csLtSegFix" data-dim="fixation" onchange="onCsLtSegmentChange()" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Fixation" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Fixation: all</option><option value="cemented">Fixation: Cemented</option><option value="porous">Fixation: Porous</option></select></span><span id="csLtBundleSt" style="font-size:10px;color:var(--text-4);margin-left:8px"></span><span id="csLtStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
             </div>
             <div id="csLtEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csLtWrap" style="display:none"></div>
@@ -1335,7 +1335,7 @@
             </div>
             <div class="chart-controls" style="margin-bottom:8px">
               <button class="chart-toggle" onclick="setCsOtdGranularity('weekly',this);loadCsOtd()">Weekly</button>
-              <button class="chart-toggle active" onclick="setCsOtdGranularity('monthly',this);loadCsOtd()">Monthly</button><select id="csOtdSegment" onchange="onCsOtdSegmentChange(this)" title="Show only one kind of case. MA and KA apply to Identity CR cases only." aria-label="Segment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px"><option value="ALL" selected>ALL</option><option value="MA">MA</option><option value="KA">KA</option><option value="Porous">Porous</option><option value="Cemented">Cemented</option><option value="Dragon">Dragon</option></select>
+              <button class="chart-toggle active" onclick="setCsOtdGranularity('monthly',this);loadCsOtd()">Monthly</button><span id="csOtdSegGrp" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap"><select id="csOtdSegJigs" data-dim="jigs" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Jigs" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Jigs: all</option><option value="standard">Jigs: Standard</option><option value="dragon">Jigs: Dragon</option></select><select id="csOtdSegAlign" data-dim="alignment" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Alignment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Alignment: all</option><option value="ma">Alignment: MA</option><option value="ka">Alignment: KA</option></select><select id="csOtdSegFix" data-dim="fixation" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Fixation" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Fixation: all</option><option value="cemented">Fixation: Cemented</option><option value="porous">Fixation: Porous</option></select></span>
               <button class="kpi-calc-btn" id="csOtdFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('otd')"><i class="fa fa-list"></i> View Cases</button>
             </div>
             <div id="csOtdEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
@@ -1376,7 +1376,7 @@
               <span id="csOtdTrViewGrp" style="display:inline-flex;gap:4px;margin-right:10px"><button class="chart-toggle active" data-w="otd" data-v="trend" onclick="csTowerSetView('otd','trend')">Trend</button><button class="chart-toggle" data-w="otd" data-v="lines" onclick="csTowerSetView('otd','lines')">By product line</button><button class="chart-toggle" data-w="otd" data-v="categories" onclick="csTowerSetView('otd','categories')">By category</button></span><select id="csOtdCatLine" onchange="csTowerLineChange('otd')" title="Product line to break into categories" aria-label="Product line" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;display:none;margin-left:0;margin-right:10px"></select><button class="chart-toggle" id="csOtdTrWeeklyBtn" onclick="setCsOtdTrGran('weekly')">Weekly</button>
               <button class="chart-toggle active" id="csOtdTrMonthlyBtn" onclick="setCsOtdTrGran('monthly')">Monthly</button>
               <label class="vol-prev" id="csOtdTrPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csOtdTrPrevChk" checked onchange="setCsOtdTrPrev(this.checked)"/> Show previous 3 months</label>
-              <select id="csOtdTrSegment" onchange="onCsOtdSegmentChange(this)" title="Show only one kind of case. MA and KA apply to Identity CR cases only." aria-label="Segment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px"><option value="ALL" selected>ALL</option><option value="MA">MA</option><option value="KA">KA</option><option value="Porous">Porous</option><option value="Cemented">Cemented</option><option value="Dragon">Dragon</option></select><span id="csOtdTrStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
+              <span id="csOtdTrSegGrp" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap"><select id="csOtdTrSegJigs" data-dim="jigs" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Jigs" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Jigs: all</option><option value="standard">Jigs: Standard</option><option value="dragon">Jigs: Dragon</option></select><select id="csOtdTrSegAlign" data-dim="alignment" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Alignment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Alignment: all</option><option value="ma">Alignment: MA</option><option value="ka">Alignment: KA</option></select><select id="csOtdTrSegFix" data-dim="fixation" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Fixation" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Fixation: all</option><option value="cemented">Fixation: Cemented</option><option value="porous">Fixation: Porous</option></select></span><span id="csOtdTrBundleSt" style="font-size:10px;color:var(--text-4);margin-left:8px"></span><span id="csOtdTrStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
             </div>
             <div id="csOtdTrEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csOtdTrWrap" style="display:none"></div>
@@ -2134,15 +2134,25 @@ function csParams(granularity,range){
 // ---- Segment dropdown (ALL / MA / KA / Porous / Cemented / Dragon) for Lead Time and On-Time Delivery ----
 // ALL adds nothing to a request, so the default charts are exactly what they were. The segment is part of every
 // per-period cache key, so switching never shows another segment's numbers, and switching back is instant.
-function csSegmentQs(selectId){
-  const el = document.getElementById(selectId);
-  const v = el ? el.value : 'ALL';
-  return (v && v !== 'ALL') ? '&segment=' + encodeURIComponent(v) : '';
+// The three dropdowns of a card, by prefix: 'csLt' (lead time), 'csOtd' (the OTD donut; the OTD trend card follows it).
+const CS_SEG_DIMS = [['jigs', 'SegJigs', {standard: 'Standard', dragon: 'Dragon'}],
+                     ['alignment', 'SegAlign', {ma: 'MA', ka: 'KA'}],
+                     ['fixation', 'SegFix', {cemented: 'Cemented', porous: 'Porous'}]];
+function csSegVals(prefix){
+  const out = {};
+  CS_SEG_DIMS.forEach(([dim, suffix]) => { const el = document.getElementById(prefix + suffix); out[dim] = el ? el.value : ''; });
+  return out;
 }
-function csSegTitle(selectId){
-  const el = document.getElementById(selectId);
-  const v = el ? el.value : 'ALL';
-  return (v && v !== 'ALL') ? ' - ' + v : '';
+// '' when nothing is chosen, else e.g. '&jigs=dragon&alignment=ka&fixation=porous' (always in this order: it is also the cache key).
+function csSegmentQs(prefix){
+  const v = csSegVals(prefix);
+  return CS_SEG_DIMS.map(([dim]) => v[dim] ? '&' + dim + '=' + encodeURIComponent(v[dim]) : '').join('');
+}
+// ' - Dragon, KA, Porous' for a card's title and copied image; '' when nothing is chosen.
+function csSegTitle(prefix){
+  const v = csSegVals(prefix);
+  const names = CS_SEG_DIMS.map(([dim,, names]) => v[dim] ? (names[v[dim]] || v[dim]) : '').filter(Boolean);
+  return names.length ? ' - ' + names.join(', ') : '';
 }
 
 // ---- Tower views: Trend | By product line | By category (Lead Time Trend card and OTD Trend card) ----
@@ -2150,9 +2160,9 @@ function csSegTitle(selectId){
 // Each slim bar is that group's OWN figure, so a bar above the dashed average line pulls the average up. One request per view.
 const CS_TW = {
   lt:  {view:'trend', gen:false, trendLoaded:false, inst:null, token:0, data:null, metric:'lt',  wrap:'csLtWrap',    canvas:'csLtChart',      empty:'csLtEmpty',   cap:'csLtCaption',   capOrig:null, status:'csLtStatus',   grp:'csLtViewGrp',    sel:'csLtCatLine',  card:'csLtCard',       what:'lead time',
-        hide:['csLtWeeklyBtn','csLtMonthlyBtn','csLtPrevWrap','csLtLinesWrap','csLtSegment']},
+        hide:['csLtWeeklyBtn','csLtMonthlyBtn','csLtPrevWrap','csLtLinesWrap','csLtSegGrp']},
   otd: {view:'trend', gen:false, trendLoaded:false, inst:null, token:0, data:null, metric:'otd', wrap:'csOtdTrWrap', canvas:'csOtdTowerChart', empty:'csOtdTrEmpty', cap:'csOtdTrCaption', capOrig:null, status:'csOtdTrStatus', grp:'csOtdTrViewGrp', sel:'csOtdCatLine', card:'csOtdTrendCard', what:'on-time delivery',
-        hide:['csOtdTrWeeklyBtn','csOtdTrMonthlyBtn','csOtdTrPrevWrap','csOtdTrSegment']}
+        hide:['csOtdTrWeeklyBtn','csOtdTrMonthlyBtn','csOtdTrPrevWrap','csOtdTrSegGrp']}
 };
 function csTowerTag(which){
   const t = CS_TW[which];
@@ -2162,9 +2172,9 @@ function csTowerTag(which){
 }
 // Shows the active segment / view next to each card's title, so a screenshot of the card says what it shows.
 function csSegPaintTitles(){
-  [['csOtdCard', () => csSegTitle('csOtdSegment')],
-   ['csOtdTrendCard', () => CS_TW.otd.view !== 'trend' ? csTowerTag('otd') : csSegTitle('csOtdSegment')],
-   ['csLtCard', () => CS_TW.lt.view !== 'trend' ? csTowerTag('lt') : csSegTitle('csLtSegment')]].forEach(([card, fn]) => {
+  [['csOtdCard', () => csSegTitle('csOtd')],
+   ['csOtdTrendCard', () => CS_TW.otd.view !== 'trend' ? csTowerTag('otd') : csSegTitle('csOtd')],
+   ['csLtCard', () => CS_TW.lt.view !== 'trend' ? csTowerTag('lt') : csSegTitle('csLt')]].forEach(([card, fn]) => {
     const t = document.querySelector('#' + card + ' .rpt-chart-title');
     if(!t) return;
     let tag = t.querySelector('.cs-seg-tag');
@@ -2174,14 +2184,17 @@ function csSegPaintTitles(){
 }
 // The two OTD cards are one measure, so they share one segment: keep both dropdowns the same.
 async function onCsOtdSegmentChange(sel){
-  ['csOtdSegment','csOtdTrSegment'].forEach(id => { const e = document.getElementById(id); if(e) e.value = sel.value; });
+  const dim = sel.getAttribute('data-dim'), suffix = (CS_SEG_DIMS.find(d => d[0] === dim) || [])[1];
+  if(suffix) ['csOtd', 'csOtdTr'].forEach(pref => { const e = document.getElementById(pref + suffix); if(e) e.value = sel.value; });
   csSegPaintTitles();
+  await csBundleSettled('otd');                                                            // the preload may still be running: wait for it rather than asking again
   if(window._csOtdLastData) loadCsOtd();                                                  // donut: only if it is already showing
   if(csOtdTrCtx && CS_TW.otd.view === 'trend'){ await csOtdTrEnsure(csOtdTrGran); renderCsOtdTrend(); }   // trend: same
 }
 async function onCsLtSegmentChange(){
   csSegPaintTitles();
   if(!csLtCtx || CS_TW.lt.view !== 'trend') return;                                       // nothing generated yet: the next Generate uses the choice
+  await csBundleSettled('lt');
   await csLtEnsure(csLtGran); csLtLastData = {gran: csLtGran}; renderCsLtChart();
 }
 
@@ -2296,11 +2309,19 @@ async function csTowerLoad(which){
   const wrap = document.getElementById(t.wrap); wrap.style.display = 'block';
   const st = document.getElementById(t.status); if(st) st.textContent = 'loading…';
   try{
-    const r = await fetch(csTowerUrl(which));
-    const d = await r.json();
+    await csBundleSettled(which);                                 // the preload may still be running
     if(my !== t.token) return;                                    // the user changed their mind while this was loading
+    let d = null;
+    const bd = CS_BUNDLE[which].data;                             // the preloaded answer, if there is one
+    if(bd && bd.tower) d = t.view === 'lines' ? bd.tower.lines : (bd.tower.categories[document.getElementById(t.sel).value] || null);
+    if(!d){                                                       // no preload (or this product line is not in it): ask the server for just this view
+      const r = await fetch(csTowerUrl(which));
+      const j = await r.json();
+      if(my !== t.token) return;
+      if(!r.ok || j.error){ if(st) st.textContent = ''; csTowerClear(which); wrap.innerHTML = '<div class="chart-empty"><p>' + esc(j.error || 'Could not load this view') + '</p></div>'; return; }
+      d = j;
+    }
     if(st) st.textContent = '';
-    if(!r.ok || d.error){ csTowerClear(which); wrap.innerHTML = '<div class="chart-empty"><p>' + esc(d.error || 'Could not load this view') + '</p></div>'; return; }
     t.data = d; csTowerRender(which);
   }catch(e){
     if(my !== t.token) return;
@@ -2365,17 +2386,107 @@ function csTowerLineChange(which){
   csSegPaintTitles();
   if(CS_TW[which].gen && CS_TW[which].view === 'categories') csTowerLoad(which);
 }
+// ---- Preload: everything the Lead Time / OTD charts can switch between, fetched ONCE per Generate ----
+// The first chart draws exactly as before. In the background ONE request per metric brings back every period (weekly and
+// monthly), every segment, the By product line view and the By category view of every product line, and (OTD) the donut's totals.
+// They are dropped into the caches the charts already read, so every later switch is instant. If the preload fails, nothing
+// breaks: each action simply asks the server for what it needs, as it always did.
+const CS_BUNDLE = {
+  lt:  {gen: 0, state: 'idle', promise: null, data: null, initial: false, st: 'csLtBundleSt'},
+  otd: {gen: 0, state: 'idle', promise: null, data: null, initial: false, st: 'csOtdTrBundleSt', sig: ''}
+};
+const csOtdDonutCache = {};          // "filters|segment" -> the totals the donut would have asked the server for
+function csFilterSig(){ const p = new URLSearchParams(csParams('monthly')); p.delete('granularity'); return p.toString(); }
+function csBundleStatus(metric, msg, fade){
+  const el = document.getElementById(CS_BUNDLE[metric].st); if(!el) return;
+  el.textContent = msg || '';
+  if(fade) setTimeout(() => { if(el.textContent === msg) el.textContent = ''; }, 4000);
+}
+function csBundleUrl(metric){
+  const p = new URLSearchParams(csParams('monthly')); p.delete('granularity');     // the page's filters (and, for the donut, its dates)
+  const buckets = [];
+  ['monthly', 'weekly'].forEach(g => csLtBuckets(g).forEach(b => buckets.push(b.from + '_' + b.to)));
+  p.set('metric', metric); p.set('buckets', [...new Set(buckets)].join(','));
+  const w = csLtWindow(); p.set('tower_from', csIso(w.selFrom)); p.set('tower_to', csIso(w.selTo));
+  return API + '/analytics/camstar/bundle?' + p.toString();
+}
+function csBundleApply(metric, d){
+  // d.combos lists all 27 dropdown combinations (as the query-string suffix the page uses for its cache keys); the preload
+  // leaves out the ones with no orders, so those are filled in as empty here.
+  const empty = metric === 'lt' ? {steps: []} : {total_cases: 0, total_yes: 0, team_otd: 0};
+  Object.keys(d.trend || {}).forEach(k => (d.combos || []).forEach(combo => {
+    const key = k + combo, e = d.trend[k][combo] || empty;
+    if(metric === 'lt'){ if(csLtCache[key] === undefined) csLtCache[key] = e; }
+    else if(csOtdTrCache[key] === undefined) csOtdTrCache[key] = e;
+  }));
+  if(metric === 'otd' && d.donut) Object.keys(d.donut).forEach(combo => { csOtdDonutCache[CS_BUNDLE.otd.sig + '|' + combo] = d.donut[combo]; });
+}
+async function csBundleSettled(metric){
+  const b = CS_BUNDLE[metric];
+  if(b.state === 'loading' && b.promise){ try{ await b.promise; }catch(e){} }
+}
+function csBundleStart(metric){
+  const b = CS_BUNDLE[metric], gen = ++b.gen;
+  b.state = 'loading'; b.data = null; if(metric === 'otd') b.sig = csFilterSig();
+  csBundleStatus(metric, 'preparing all views…');
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 85000);
+  b.promise = (async () => {
+    try{
+      const r = await fetch(csBundleUrl(metric), {signal: ctl.signal});
+      const d = await r.json();
+      if(gen !== b.gen) return null;                              // a newer Generate replaced this one
+      if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+      b.data = d; b.state = 'ready'; csBundleApply(metric, d);
+      csBundleStatus(metric, 'all views ready', true);
+      return d;
+    }catch(e){
+      if(gen !== b.gen) return null;
+      b.state = 'failed'; csBundleStatus(metric, 'switching will load on demand', true);
+      return null;
+    }finally{ clearTimeout(timer); }
+  })();
+  return b.promise;
+}
+// Whatever asks for periods (first load, Weekly/Monthly, previous 3 months, a segment) first fills the caches from the preload.
+// During the very first load it does not wait (so the first chart is as fast as ever); a later user action waits for a preload still running.
+const csOrigLtEnsure = csLtEnsure;
+csLtEnsure = async function(){
+  const b = CS_BUNDLE.lt;
+  if(b.state === 'loading' && !b.initial) await csBundleSettled('lt');
+  if(b.state === 'ready' && b.data) csBundleApply('lt', b.data);
+  return csOrigLtEnsure.apply(this, arguments);
+};
+const csOrigOtdTrEnsure = csOtdTrEnsure;
+csOtdTrEnsure = async function(){
+  const b = CS_BUNDLE.otd;
+  if(b.state === 'loading' && !b.initial) await csBundleSettled('otd');
+  if(b.state === 'ready' && b.data) csBundleApply('otd', b.data);
+  return csOrigOtdTrEnsure.apply(this, arguments);
+};
+
 // Generate (and the original renderers) go through these wrappers: in a tower view they draw the tower; otherwise nothing changes.
 const csOrigLoadCsLtByStep = loadCsLtByStep;
 loadCsLtByStep = async function(){
-  const t = CS_TW.lt; t.gen = true; t.trendLoaded = false;
-  if(t.view === 'trend'){ t.trendLoaded = true; return csOrigLoadCsLtByStep.apply(this, arguments); }
+  const t = CS_TW.lt, b = CS_BUNDLE.lt; t.gen = true; t.trendLoaded = false; csLtCache = {};
+  if(t.view === 'trend'){
+    t.trendLoaded = true; b.initial = true;
+    const p = csOrigLoadCsLtByStep.apply(this, arguments);       // the first chart: exactly as before
+    csBundleStart('lt');                                          // ...and everything else, in the background
+    try{ return await p; }finally{ b.initial = false; }
+  }
+  csBundleStart('lt');
   return csTowerLoad('lt');
 };
 const csOrigLoadCsOtdTrend = loadCsOtdTrend;
 loadCsOtdTrend = async function(){
-  const t = CS_TW.otd; t.gen = true; t.trendLoaded = false;
-  if(t.view === 'trend'){ t.trendLoaded = true; return csOrigLoadCsOtdTrend.apply(this, arguments); }
+  const t = CS_TW.otd, b = CS_BUNDLE.otd; t.gen = true; t.trendLoaded = false; csOtdTrCache = {};
+  if(t.view === 'trend'){
+    t.trendLoaded = true; b.initial = true;
+    const p = csOrigLoadCsOtdTrend.apply(this, arguments);
+    csBundleStart('otd');
+    try{ return await p; }finally{ b.initial = false; }
+  }
+  csBundleStart('otd');
   return csTowerLoad('otd');
 };
 const csOrigRenderCsLtChart = renderCsLtChart;
@@ -2386,13 +2497,13 @@ renderCsOtdTrend = function(){ if(CS_TW.otd.view !== 'trend'){ if(CS_TW.otd.data
 // Copy images carry the segment / view in their title (the dropdowns themselves are not part of the copied picture).
 const csOrigCopyRptChart = copyRptChart;
 copyRptChart = function(canvasId, label, e){
-  if(canvasId === 'csOtdChart') label += csSegTitle('csOtdSegment');
-  else if(canvasId === 'csLtChart') label += CS_TW.lt.view !== 'trend' ? csTowerTag('lt') : csSegTitle('csLtSegment');
+  if(canvasId === 'csOtdChart') label += csSegTitle('csOtd');
+  else if(canvasId === 'csLtChart') label += CS_TW.lt.view !== 'trend' ? csTowerTag('lt') : csSegTitle('csLt');
   return csOrigCopyRptChart.call(this, canvasId, label, e);
 };
 const csOrigCopyRptCardEl = copyRptCardEl;
 copyRptCardEl = function(btn, label, cardId){
-  if(cardId === 'csOtdTrendCard') label += CS_TW.otd.view !== 'trend' ? csTowerTag('otd') : csSegTitle('csOtdSegment');
+  if(cardId === 'csOtdTrendCard') label += CS_TW.otd.view !== 'trend' ? csTowerTag('otd') : csSegTitle('csOtd');
   return csOrigCopyRptCardEl.call(this, btn, label, cardId);
 };
 
@@ -2646,7 +2757,7 @@ function csLtBuckets(gran){
 // fetch the buckets that are not cached yet (4 requests at a time). Monthly always includes the previous months; weekly only when they are shown.
 async function csLtEnsure(gran){
   const ctx=csLtCtx; if(!ctx)return;
-  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csLtShowPrev||b.selected); const segQs=csSegmentQs('csLtSegment');
+  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csLtShowPrev||b.selected); const segQs=csSegmentQs('csLt');
   const tasks=[]; let total=0, done=0, failed=0;
   need.forEach(b=>{const key=`${b.from}|${b.to}${segQs}`; if(csLtCache[key]!==undefined)return; total++;
     tasks.push(async()=>{
@@ -2660,7 +2771,7 @@ async function csLtEnsure(gran){
   const st=document.getElementById('csLtStatus'); if(st)st.textContent=failed?`${failed} of ${total} requests failed; those periods are left blank`:'';
 }
 function csLtBuild(gran){
-  const buckets=csLtBuckets(gran).filter(b=>csLtShowPrev||b.selected).map(b=>({...b,data:csLtCache[`${b.from}|${b.to}${csSegmentQs('csLtSegment')}`]||null}));
+  const buckets=csLtBuckets(gran).filter(b=>csLtShowPrev||b.selected).map(b=>({...b,data:csLtCache[`${b.from}|${b.to}${csSegmentQs('csLt')}`]||null}));
   const fam=[], seen=new Set();
   buckets.forEach(b=>(b.data?.steps||[]).forEach(x=>{if(x.avg_days!=null&&!seen.has(x.process)){seen.add(x.process);fam.push(x.process);}}));
   const wk=CS_COUNT_KEYS.find(k=>buckets.some(b=>(b.data?.steps||[]).some(x=>typeof x[k]==='number'&&x[k]>0)))||null;
@@ -3246,9 +3357,9 @@ async function loadCsOtd(){
   const el = document.getElementById('csOtdEmpty'); if(el) el.style.display='none';
   document.getElementById('csOtdWrap').style.display='block';
   try{
-    const qs = csParams(csOtdGranularity_) + csSegmentQs('csOtdSegment');
-    const res = await fetch(`${API}/analytics/camstar/otd?${qs}`);
-    const data = await res.json();
+    const qs = csParams(csOtdGranularity_) + csSegmentQs('csOtd');
+    const pre = csOtdDonutCache[csFilterSig() + '|' + csSegmentQs('csOtd')];   // preloaded with the report
+    const data = pre || await (await fetch(`${API}/analytics/camstar/otd?${qs}`)).json();
     if(data.error){toast('OTD error: '+data.error,'err');document.getElementById('cs-otd-avg').textContent='Error';return;}
     document.getElementById('cs-otd-avg').textContent = data.team_otd+'%';
     document.getElementById('cs-otd-sub').textContent = `${data.total_yes}/${data.total_cases} on time · ${csOtdGranularity_}${data.segment ? ' · ' + data.segment : ''}`;
@@ -3290,7 +3401,7 @@ function csOtdTrSyncToggles(){
 }
 async function csOtdTrEnsure(gran){
   if(!csOtdTrCtx)return;
-  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csOtdTrShowPrev||b.selected); const segQs=csSegmentQs('csOtdSegment');
+  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csOtdTrShowPrev||b.selected); const segQs=csSegmentQs('csOtd');
   const tasks=[]; let total=0, done=0, failed=0;
   need.forEach(b=>{const key=`${b.from}|${b.to}${segQs}`; if(csOtdTrCache[key]!==undefined)return; total++;
     tasks.push(async()=>{
@@ -3305,7 +3416,7 @@ async function csOtdTrEnsure(gran){
 }
 function csOtdTrBuild(gran){
   return csLtBuckets(gran).filter(b=>csOtdTrShowPrev||b.selected).map(b=>{
-    const d=csOtdTrCache[`${b.from}|${b.to}${csSegmentQs('csOtdSegment')}`]||null, tot=Number(d?.total_cases)||0, yes=Number(d?.total_yes)||0;
+    const d=csOtdTrCache[`${b.from}|${b.to}${csSegmentQs('csOtd')}`]||null, tot=Number(d?.total_cases)||0, yes=Number(d?.total_yes)||0;
     return{label:b.label,selected:b.selected,yes,total:tot,pct:tot>0?yes/tot*100:null};
   });
 }
