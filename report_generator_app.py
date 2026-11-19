@@ -3236,15 +3236,6 @@ def camstar_breakdown_fixation_proxy():
     return _camstar_proxy("/analytics/camstar/breakdown/fixation")
 
 
-# ── Camstar tower views (Lead Time / OTD by product line or by category) ──
-# One request returns every bar of the "By product line" / "By category" views. Same explicit-whitelist
-# pattern as the routes above; the whole query string is forwarded to camstar-app untouched.
-
-@app.route("/analytics/camstar/compare", methods=["GET"])
-def camstar_compare_proxy():
-    return _camstar_proxy("/analytics/camstar/compare")
-
-
 # ══════════════════════════════════════════════════════════════
 #  GROUPED LEAD TIME ENGINE (shoulder & ankle)
 #  + NEW ON-TIME DELIVERY  + SURGICAL PLAN USER OPTIONS
@@ -4112,6 +4103,163 @@ def report_dp_lt_trend():
         out = _dp_lt_series(frame, sel_from, sel_to, win_from)
         out.update({"definition": definition, "sel_from": sel_from.strftime('%Y-%m-%d'), "sel_to": sel_to.strftime('%Y-%m-%d'),
                     "win_from": win_from_s})
+        return jsonify(out)
+    except Exception as e:
+        return handle_error(request.endpoint, e)
+
+
+# ── NCR rate: NCR entries come from the Database_Index sheet ('NCRs' tab), read like the Accounts tab (public CSV export) ──
+DATABASE_INDEX_NCR_GID = "1667888268"
+_ncr_cache = {"data": None, "fetched_at": None}
+_NCR_CACHE_TTL_SECONDS = 600  # 10 minutes
+_NCR_MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+
+
+def _ncr_family(product):
+    """Which NCR family a 'product line' value belongs to.
+    PSR -> ankle, Shoulder -> shoulder, everything except HIP / PSR / Shoulder -> knee. HIP (and blank) -> None (not counted)."""
+    p = str(product or "").strip().lower()
+    if not p or p == "nan" or p == "hip":
+        return None
+    if p == "psr":
+        return "ankle"
+    if p == "shoulder":
+        return "shoulder"
+    return "knee"
+
+
+def _parse_ncr_date(raw, month_hint=None):
+    """The sheet mixes m/d/yyyy and d/m/yyyy (and ISO). When both numbers could be a month, the sheet's own Month column decides.
+    Returns (date or None, how) where how is one of iso / mdy / dmy / mdy-default / text / blank / bad."""
+    s = str(raw or "").strip()
+    if not s or s.lower() == "nan":
+        return None, "blank"
+    m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3))), "iso"
+        except ValueError:
+            return None, "bad"
+    m = re.match(r"^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})", s)
+    if m:
+        a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        y = y + 2000 if y < 100 else y
+        if a > 12 and b <= 12:
+            mon, day, how = b, a, "dmy"
+        elif b > 12 and a <= 12:
+            mon, day, how = a, b, "mdy"
+        elif a <= 12 and b <= 12:
+            if a != b and month_hint == b:
+                mon, day, how = b, a, "dmy"
+            elif a != b and month_hint == a:
+                mon, day, how = a, b, "mdy"
+            else:
+                mon, day, how = a, b, "mdy-default"
+        else:
+            return None, "bad"
+        try:
+            return datetime.date(y, mon, day), how
+        except ValueError:
+            return None, "bad"
+    try:
+        t = pd.to_datetime(s, errors="coerce")
+        if pd.notna(t):
+            return t.date(), "text"
+    except Exception:
+        pass
+    return None, "bad"
+
+
+def get_ncr_rows(force_refresh=False):
+    """Reads the NCRs tab and returns (rows, meta). rows = [{date, how, raw_date, product, family, cad}] (cad = 'CAD Error' is Yes).
+    Cached for _NCR_CACHE_TTL_SECONDS. On a failed fetch the last good copy is returned (or (None, error))."""
+    now = datetime.datetime.utcnow()
+    cached, fetched_at = _ncr_cache["data"], _ncr_cache["fetched_at"]
+    if (not force_refresh and cached is not None and fetched_at is not None
+            and (now - fetched_at).total_seconds() < _NCR_CACHE_TTL_SECONDS):
+        return cached
+    csv_url = (f"https://docs.google.com/spreadsheets/d/{DATABASE_INDEX_SHEET_ID}"
+               f"/export?format=csv&gid={DATABASE_INDEX_NCR_GID}")
+    try:
+        df = pd.read_csv(csv_url, dtype=str, keep_default_na=False)
+    except Exception as e:
+        logger.error(f"Failed to fetch NCRs sheet: {e}")
+        return cached if cached is not None else (None, {"error": f"NCRs sheet unavailable: {e}"})
+    headers = [str(c).strip() for c in df.columns]
+    low = [h.lower() for h in headers]
+
+    def find(pred):
+        for i, h in enumerate(low):
+            if pred(h):
+                return i
+        return None
+    c_prod = find(lambda h: h == "product line") if find(lambda h: h == "product line") is not None else find(lambda h: "product" in h)
+    c_date = find(lambda h: "initiat" in h)
+    c_cad = find(lambda h: h.startswith("cad"))
+    c_month = find(lambda h: h == "month")
+    meta = {"headers": headers, "columns": {"product_line": headers[c_prod] if c_prod is not None else None,
+            "initiated_date": headers[c_date] if c_date is not None else None,
+            "cad_error": headers[c_cad] if c_cad is not None else None, "month": headers[c_month] if c_month is not None else None}}
+    if c_prod is None or c_date is None or c_cad is None:
+        meta["error"] = "Could not find the Product line, Initiated date and CAD Error columns in the NCRs tab"
+        return None, meta
+    rows = []
+    for rec in df.itertuples(index=False):
+        vals = list(rec)
+        hint = _NCR_MONTHS.get(str(vals[c_month]).strip().lower()[:3]) if c_month is not None else None
+        d, how = _parse_ncr_date(vals[c_date], hint)
+        product = str(vals[c_prod]).strip()
+        if not product and d is None and not str(vals[c_cad]).strip():
+            continue                                          # empty line
+        rows.append({"date": d, "how": how, "raw_date": str(vals[c_date]).strip(), "product": product,
+                     "family": _ncr_family(product), "cad": str(vals[c_cad]).strip().lower() == "yes"})
+    result = (rows, meta)
+    _ncr_cache["data"], _ncr_cache["fetched_at"] = result, now
+    return result
+
+
+@app.route("/analytics/ncr-count", methods=["GET"])
+def ncr_count():
+    """Number of NCR entries initiated in the date range, with CAD Error = Yes, for the chosen families.
+    family = comma list of ankle (product line PSR), shoulder (Shoulder), knee (everything except HIP / PSR / Shoulder).
+    ?debug=1 adds what was read from the sheet (columns found, product values and their family, date formats)."""
+    try:
+        args = request.args
+        fams = [f for f in (args.get("family") or "ankle,shoulder,knee").lower().split(",") if f.strip() in ("ankle", "shoulder", "knee")]
+        fams = [f.strip() for f in fams]
+        d_from, d_to = validate_date(args.get("date_from", "")), validate_date(args.get("date_to", ""))
+        rows, meta = get_ncr_rows(force_refresh=args.get("refresh", "").lower() == "true")
+        if rows is None:
+            return jsonify({"error": meta.get("error", "NCRs sheet unavailable"), "meta": meta}), 503
+        lo = datetime.date.fromisoformat(d_from) if d_from else None
+        hi = datetime.date.fromisoformat(d_to) if d_to else None
+        by_family = {"ankle": 0, "shoulder": 0, "knee": 0}
+        undated = 0
+        for r in rows:
+            if not r["cad"] or r["family"] not in fams:
+                continue
+            if lo or hi:
+                if r["date"] is None:
+                    undated += 1
+                    continue
+                if (lo and r["date"] < lo) or (hi and r["date"] > hi):
+                    continue
+            by_family[r["family"]] += 1
+        out = {"count": sum(by_family[f] for f in fams), "by_family": by_family, "families": fams,
+               "date_from": d_from, "date_to": d_to, "rows_in_sheet": len(rows), "undated_skipped": undated}
+        if args.get("debug") == "1":
+            prods = {}
+            for r in rows:
+                k = r["product"] or "(blank)"
+                prods.setdefault(k, {"family": r["family"] or "not counted", "rows": 0, "cad_yes": 0})
+                prods[k]["rows"] += 1
+                prods[k]["cad_yes"] += 1 if r["cad"] else 0
+            kinds = {}
+            for r in rows:
+                kinds[r["how"]] = kinds.get(r["how"], 0) + 1
+            out["debug"] = {"columns": meta["columns"], "headers": meta["headers"], "product_values": prods, "date_formats": kinds,
+                            "ambiguous_dates_defaulted_to_month_first": [r["raw_date"] for r in rows if r["how"] == "mdy-default"][:15],
+                            "unreadable_dates": [r["raw_date"] for r in rows if r["how"] == "bad"][:15]}
         return jsonify(out)
     except Exception as e:
         return handle_error(request.endpoint, e)

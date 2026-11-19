@@ -9,11 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script>
-    if (localStorage.getItem('isAuthenticated') !== 'true') {
-        window.location.replace('login.html');
-    }
-  </script>
+  <!-- TEST BUILD: the login check that redirects to login.html has been removed -->
   <!-- Shared layout stylesheet -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -346,7 +342,9 @@
     .rpt-stat-val{font-size:22px;font-weight:800;color:#008EAA}
     .rpt-stat-lbl{font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
     .rpt-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-    @media(max-width:900px){.rpt-kpi-row{grid-template-columns:repeat(2,1fr)}}
+.rpt-kpi-row.rpt-kpi-row-5{grid-template-columns:repeat(5,1fr)}
+    @media(max-width:900px){.rpt-kpi-row{grid-template-columns:repeat(2,1fr)}
+  .rpt-kpi-row.rpt-kpi-row-5{grid-template-columns:repeat(2,1fr)}}
     .rpt-kpi{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);position:relative;overflow:hidden}
     .rpt-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:#008EAA}
     .rpt-kpi-lbl{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
@@ -396,6 +394,7 @@
       .rpt-chart-wrap-tall { height:280px !important; overflow:visible !important; }
       /* KPI tiles and WIP tiles */
       .rpt-kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; break-inside:avoid; }
+      .rpt-kpi-row.rpt-kpi-row-5 { grid-template-columns:repeat(5,1fr); }
       .rpt-wip-row { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; break-inside:avoid; }
       .rpt-kpi { break-inside:avoid; }
       .rpt-wip-tile { break-inside:avoid; }
@@ -512,6 +511,7 @@
 </style>
 </head>
 <body>
+<div data-html2canvas-ignore="true" style="position:fixed;bottom:8px;left:8px;z-index:99999;background:#fff7e6;border:1px solid #f5c26b;color:#8a5a00;font:11px/1.3 Arial,sans-serif;padding:4px 8px;border-radius:6px;opacity:.9;pointer-events:none">TEST BUILD &middot; login disabled &middot; do not publish to the website</div>
 <div class="loading-overlay" id="loadingOverlay">
   <img class="loading-gif" id="loadingGif" src="" alt="loading"/>
   <div class="loading-text">What if I told you...<br><strong id="loadingText">the data is loading</strong></div>
@@ -867,11 +867,12 @@
           </div>
 
           <!-- KPI row -->
-          <div class="rpt-kpi-row">
+          <div class="rpt-kpi-row rpt-kpi-row-5">
             <div class="rpt-kpi"><div class="rpt-kpi-lbl">Case Volume</div><div class="rpt-kpi-val" id="rptKpiVolume">—</div><div class="rpt-kpi-sub">PSP completed</div><div class="logic-caption-tile">Cases whose effective PSP date falls in range. Effective PSP = earliest of PSP reviewer accept, peer review accept, or ship date.</div></div>
             <div class="rpt-kpi"><div class="rpt-kpi-lbl">Avg Total Lead Time</div><div class="rpt-kpi-val" id="rptKpiTotalLt">—<span class="rpt-kpi-unit"> d</span></div><div class="rpt-kpi-sub">Ship to scan</div><div class="logic-caption-tile">Days from first scan upload to ship complete, minus on-hold days.</div></div>
             <div class="rpt-kpi"><div class="rpt-kpi-lbl">Avg Digital Prod LT</div><div class="rpt-kpi-val" id="rptKpiDigitalLt">—<span class="rpt-kpi-unit"> d</span></div><div class="rpt-kpi-sub">PSP completion</div><div class="logic-caption-tile">Days from first scan upload to PSP completion, excluding surgeon wait and on-hold time.</div></div>
             <div class="rpt-kpi"><div class="rpt-kpi-lbl">On Hold Cases</div><div class="rpt-kpi-val" id="rptKpiOnHold">—</div><div class="rpt-kpi-sub">Current snapshot</div><div class="logic-caption-tile">Cases currently flagged on hold. Snapshot ignores date filter.</div></div>
+            <div class="rpt-kpi" id="rptKpiNcrTile"><div class="rpt-kpi-lbl">NCR Rate</div><div class="rpt-kpi-val" id="rptKpiNcr">—</div><div class="rpt-kpi-sub" id="rptKpiNcrSub">—</div><div class="logic-caption-tile">NCR entries with CAD Error = Yes, initiated in the date range, divided by the cases completed in the date range. Ankle = product line PSR, shoulder = Shoulder, knee = every other line except Hip. Case type, user and surgeon filters do not apply (the NCR list has no such fields).</div></div>
           </div>
 
           <!-- WIP pipeline tiles -->
@@ -1192,6 +1193,7 @@
             </div>
             <div class="rpt-kpi-row" style="margin-bottom:10px">
               <div class="rpt-kpi"><div class="rpt-kpi-lbl">Total Volume</div><div class="rpt-kpi-val" id="cs-vol-total">—</div><div class="rpt-kpi-sub" id="cs-vol-sub">—</div></div>
+              <div class="rpt-kpi" id="cs-ncr-tile" title="NCR entries with CAD Error = Yes, initiated in the date range, divided by the knee cases completed in the date range. Product line, team and step filters do not apply."><div class="rpt-kpi-lbl">NCR Rate</div><div class="rpt-kpi-val" id="cs-ncr-rate">—</div><div class="rpt-kpi-sub" id="cs-ncr-sub">—</div></div>
             </div>
             <div class="chart-controls" style="margin-bottom:8px">
               <button class="chart-toggle" onclick="setCsGranularity('weekly',this);loadCamstarVolume()">Weekly</button>
@@ -1246,11 +1248,11 @@
               <button class="cs-reset-btn" onclick="resetRptChartSettings('csLtChart')"><i class="fa fa-undo"></i> Reset</button>
             </div>
             <div class="chart-controls" style="margin-bottom:8px">
-              <span id="csLtViewGrp" style="display:inline-flex;gap:4px;margin-right:10px"><button class="chart-toggle active" data-w="lt" data-v="trend" onclick="csTowerSetView('lt','trend')">Trend</button><button class="chart-toggle" data-w="lt" data-v="lines" onclick="csTowerSetView('lt','lines')">By product line</button><button class="chart-toggle" data-w="lt" data-v="categories" onclick="csTowerSetView('lt','categories')">By category</button></span><select id="csLtCatLine" onchange="csTowerLineChange('lt')" title="Product line to break into categories" aria-label="Product line" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;display:none;margin-left:0;margin-right:10px"></select><button class="chart-toggle" id="csLtWeeklyBtn" onclick="setCsLtGran('weekly')">Weekly</button>
+              <button class="chart-toggle" id="csLtWeeklyBtn" onclick="setCsLtGran('weekly')">Weekly</button>
               <button class="chart-toggle active" id="csLtMonthlyBtn" onclick="setCsLtGran('monthly')">Monthly</button>
               <label class="vol-prev" id="csLtPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csLtPrevChk" checked onchange="setCsLtPrev(this.checked)"/> Show previous 3 months</label>
               <label class="vol-prev" id="csLtLinesWrap" style="margin-left:12px" title="Adds one line per product line"><input type="checkbox" id="csLtLinesChk" onchange="setCsLtLines(this.checked)"/> Show product lines</label>
-              <span id="csLtSegGrp" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap"><select id="csLtSegJigs" data-dim="jigs" onchange="onCsLtSegmentChange()" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Jigs" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Jigs: all</option><option value="standard">Jigs: Standard</option><option value="dragon">Jigs: Dragon</option></select><select id="csLtSegAlign" data-dim="alignment" onchange="onCsLtSegmentChange()" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Alignment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Alignment: all</option><option value="ma">Alignment: MA</option><option value="ka">Alignment: KA</option></select><select id="csLtSegFix" data-dim="fixation" onchange="onCsLtSegmentChange()" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Fixation" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Fixation: all</option><option value="cemented">Fixation: Cemented</option><option value="porous">Fixation: Porous</option></select></span><span id="csLtBundleSt" style="font-size:10px;color:var(--text-4);margin-left:8px"></span><span id="csLtStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
+              <span id="csLtStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
             </div>
             <div id="csLtEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csLtWrap" style="display:none"></div>
@@ -1335,7 +1337,7 @@
             </div>
             <div class="chart-controls" style="margin-bottom:8px">
               <button class="chart-toggle" onclick="setCsOtdGranularity('weekly',this);loadCsOtd()">Weekly</button>
-              <button class="chart-toggle active" onclick="setCsOtdGranularity('monthly',this);loadCsOtd()">Monthly</button><span id="csOtdSegGrp" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap"><select id="csOtdSegJigs" data-dim="jigs" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Jigs" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Jigs: all</option><option value="standard">Jigs: Standard</option><option value="dragon">Jigs: Dragon</option></select><select id="csOtdSegAlign" data-dim="alignment" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Alignment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Alignment: all</option><option value="ma">Alignment: MA</option><option value="ka">Alignment: KA</option></select><select id="csOtdSegFix" data-dim="fixation" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Fixation" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Fixation: all</option><option value="cemented">Fixation: Cemented</option><option value="porous">Fixation: Porous</option></select></span>
+              <button class="chart-toggle active" onclick="setCsOtdGranularity('monthly',this);loadCsOtd()">Monthly</button>
               <button class="kpi-calc-btn" id="csOtdFetchBtn" style="display:none;width:auto;padding:0 10px;margin:0" onclick="fetchCsCases('otd')"><i class="fa fa-list"></i> View Cases</button>
             </div>
             <div id="csOtdEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
@@ -1373,10 +1375,10 @@
             <button class="copy-btn" onclick="copyRptCardEl(this,'Camstar On-Time Delivery Trend','csOtdTrendCard')"><i class="fa fa-copy"></i> Copy</button>
             <div class="rpt-chart-title"><i class="fa fa-bullseye"></i> On-Time Delivery Trend <span style="font-weight:400;font-size:11px;color:var(--text-4)">% of cases on time</span></div>
             <div class="chart-controls" id="csOtdTrToggles" data-html2canvas-ignore="true" style="margin-bottom:8px">
-              <span id="csOtdTrViewGrp" style="display:inline-flex;gap:4px;margin-right:10px"><button class="chart-toggle active" data-w="otd" data-v="trend" onclick="csTowerSetView('otd','trend')">Trend</button><button class="chart-toggle" data-w="otd" data-v="lines" onclick="csTowerSetView('otd','lines')">By product line</button><button class="chart-toggle" data-w="otd" data-v="categories" onclick="csTowerSetView('otd','categories')">By category</button></span><select id="csOtdCatLine" onchange="csTowerLineChange('otd')" title="Product line to break into categories" aria-label="Product line" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;display:none;margin-left:0;margin-right:10px"></select><button class="chart-toggle" id="csOtdTrWeeklyBtn" onclick="setCsOtdTrGran('weekly')">Weekly</button>
+              <button class="chart-toggle" id="csOtdTrWeeklyBtn" onclick="setCsOtdTrGran('weekly')">Weekly</button>
               <button class="chart-toggle active" id="csOtdTrMonthlyBtn" onclick="setCsOtdTrGran('monthly')">Monthly</button>
               <label class="vol-prev" id="csOtdTrPrevWrap" title="Also shows the 3 months before the selected period"><input type="checkbox" id="csOtdTrPrevChk" checked onchange="setCsOtdTrPrev(this.checked)"/> Show previous 3 months</label>
-              <span id="csOtdTrSegGrp" style="display:inline-flex;gap:4px;margin-left:8px;flex-wrap:wrap"><select id="csOtdTrSegJigs" data-dim="jigs" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Jigs" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Jigs: all</option><option value="standard">Jigs: Standard</option><option value="dragon">Jigs: Dragon</option></select><select id="csOtdTrSegAlign" data-dim="alignment" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Alignment" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Alignment: all</option><option value="ma">Alignment: MA</option><option value="ka">Alignment: KA</option></select><select id="csOtdTrSegFix" data-dim="fixation" onchange="onCsOtdSegmentChange(this)" title="Combine the three to narrow the cases, e.g. Dragon + KA + Porous. MA and KA apply to Identity CR cases only; Standard and Dragon to cases that have a jig code." aria-label="Fixation" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--text-2);cursor:pointer;margin-left:8px;margin-left:0"><option value="" selected>Fixation: all</option><option value="cemented">Fixation: Cemented</option><option value="porous">Fixation: Porous</option></select></span><span id="csOtdTrBundleSt" style="font-size:10px;color:var(--text-4);margin-left:8px"></span><span id="csOtdTrStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
+              <span id="csOtdTrStatus" style="font-size:10px;color:var(--text-4);margin-left:8px"></span>
             </div>
             <div id="csOtdTrEmpty" style="color:var(--text-4);font-size:12px">Click Generate to load.</div>
             <div class="rpt-chart-wrap" id="csOtdTrWrap" style="display:none"></div>
@@ -2131,382 +2133,6 @@ function csParams(granularity,range){
   return params.toString();
 }
 
-// ---- Segment dropdown (ALL / MA / KA / Porous / Cemented / Dragon) for Lead Time and On-Time Delivery ----
-// ALL adds nothing to a request, so the default charts are exactly what they were. The segment is part of every
-// per-period cache key, so switching never shows another segment's numbers, and switching back is instant.
-// The three dropdowns of a card, by prefix: 'csLt' (lead time), 'csOtd' (the OTD donut; the OTD trend card follows it).
-const CS_SEG_DIMS = [['jigs', 'SegJigs', {standard: 'Standard', dragon: 'Dragon'}],
-                     ['alignment', 'SegAlign', {ma: 'MA', ka: 'KA'}],
-                     ['fixation', 'SegFix', {cemented: 'Cemented', porous: 'Porous'}]];
-function csSegVals(prefix){
-  const out = {};
-  CS_SEG_DIMS.forEach(([dim, suffix]) => { const el = document.getElementById(prefix + suffix); out[dim] = el ? el.value : ''; });
-  return out;
-}
-// '' when nothing is chosen, else e.g. '&jigs=dragon&alignment=ka&fixation=porous' (always in this order: it is also the cache key).
-function csSegmentQs(prefix){
-  const v = csSegVals(prefix);
-  return CS_SEG_DIMS.map(([dim]) => v[dim] ? '&' + dim + '=' + encodeURIComponent(v[dim]) : '').join('');
-}
-// ' - Dragon, KA, Porous' for a card's title and copied image; '' when nothing is chosen.
-function csSegTitle(prefix){
-  const v = csSegVals(prefix);
-  const names = CS_SEG_DIMS.map(([dim,, names]) => v[dim] ? (names[v[dim]] || v[dim]) : '').filter(Boolean);
-  return names.length ? ' - ' + names.join(', ') : '';
-}
-
-// ---- Tower views: Trend | By product line | By category (Lead Time Trend card and OTD Trend card) ----
-// One big bar is the average; inside it, a slim bar per product line (or, for one chosen product line, per category).
-// Each slim bar is that group's OWN figure, so a bar above the dashed average line pulls the average up. One request per view.
-const CS_TW = {
-  lt:  {view:'trend', gen:false, trendLoaded:false, inst:null, token:0, data:null, metric:'lt',  wrap:'csLtWrap',    canvas:'csLtChart',      empty:'csLtEmpty',   cap:'csLtCaption',   capOrig:null, status:'csLtStatus',   grp:'csLtViewGrp',    sel:'csLtCatLine',  card:'csLtCard',       what:'lead time',
-        hide:['csLtWeeklyBtn','csLtMonthlyBtn','csLtPrevWrap','csLtLinesWrap','csLtSegGrp']},
-  otd: {view:'trend', gen:false, trendLoaded:false, inst:null, token:0, data:null, metric:'otd', wrap:'csOtdTrWrap', canvas:'csOtdTowerChart', empty:'csOtdTrEmpty', cap:'csOtdTrCaption', capOrig:null, status:'csOtdTrStatus', grp:'csOtdTrViewGrp', sel:'csOtdCatLine', card:'csOtdTrendCard', what:'on-time delivery',
-        hide:['csOtdTrWeeklyBtn','csOtdTrMonthlyBtn','csOtdTrPrevWrap','csOtdTrSegGrp']}
-};
-function csTowerTag(which){
-  const t = CS_TW[which];
-  if(t.view === 'lines') return ' - by product line';
-  if(t.view === 'categories'){ const s = document.getElementById(t.sel); return ' - ' + ((s && s.value) || 'category') + ' categories'; }
-  return '';
-}
-// Shows the active segment / view next to each card's title, so a screenshot of the card says what it shows.
-function csSegPaintTitles(){
-  [['csOtdCard', () => csSegTitle('csOtd')],
-   ['csOtdTrendCard', () => CS_TW.otd.view !== 'trend' ? csTowerTag('otd') : csSegTitle('csOtd')],
-   ['csLtCard', () => CS_TW.lt.view !== 'trend' ? csTowerTag('lt') : csSegTitle('csLt')]].forEach(([card, fn]) => {
-    const t = document.querySelector('#' + card + ' .rpt-chart-title');
-    if(!t) return;
-    let tag = t.querySelector('.cs-seg-tag');
-    if(!tag){ tag = document.createElement('span'); tag.className = 'cs-seg-tag'; t.appendChild(tag); }
-    tag.textContent = fn();
-  });
-}
-// The two OTD cards are one measure, so they share one segment: keep both dropdowns the same.
-async function onCsOtdSegmentChange(sel){
-  const dim = sel.getAttribute('data-dim'), suffix = (CS_SEG_DIMS.find(d => d[0] === dim) || [])[1];
-  if(suffix) ['csOtd', 'csOtdTr'].forEach(pref => { const e = document.getElementById(pref + suffix); if(e) e.value = sel.value; });
-  csSegPaintTitles();
-  await csBundleSettled('otd');                                                            // the preload may still be running: wait for it rather than asking again
-  if(window._csOtdLastData) loadCsOtd();                                                  // donut: only if it is already showing
-  if(csOtdTrCtx && CS_TW.otd.view === 'trend'){ await csOtdTrEnsure(csOtdTrGran); renderCsOtdTrend(); }   // trend: same
-}
-async function onCsLtSegmentChange(){
-  csSegPaintTitles();
-  if(!csLtCtx || CS_TW.lt.view !== 'trend') return;                                       // nothing generated yet: the next Generate uses the choice
-  await csBundleSettled('lt');
-  await csLtEnsure(csLtGran); csLtLastData = {gran: csLtGran}; renderCsLtChart();
-}
-
-function csNiceMax(v){
-  // axis top lands on a clean tick: whole days up to 6, even days up to 30, tens beyond
-  if(!(v > 0)) return 1;
-  if(v <= 6) return Math.max(1, Math.ceil(v));
-  if(v <= 30) return Math.ceil(v / 2) * 2;
-  return Math.ceil(v / 10) * 10;
-}
-// Draws the slim bars, their names (sideways), values, order counts, group captions and the average label.
-// Pure canvas drawing, called by the chart plugin; returns what it drew so it can be tested.
-function csTowerDraw(ctx, area, yPx, model){
-  const items = [], unit = model.unit, avg = model.average.value;
-  const fmt = v => unit === '%' ? v.toFixed(1) + '%' : v.toFixed(1) + ' d';
-  const better = v => unit === '%' ? v >= avg : v <= avg;
-  const base = yPx(0), yAvg = yPx(avg), FONT = '"Segoe UI",system-ui,sans-serif';
-  ctx.save();
-  ctx.strokeStyle = '#005F72'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
-  ctx.beginPath(); ctx.moveTo(area.left + 4, yAvg); ctx.lineTo(area.right + 18, yAvg); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#005F72'; ctx.font = '600 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText('avg ' + fmt(avg), area.right + 22, yAvg); items.push({t: 'avg', text: 'avg ' + fmt(avg)});
-  const groups = model.groups, k = groups.reduce((a, g) => a + g.bars.length, 0);
-  if(k){
-    const gap = 34, avail = area.right - area.left - 24 - (groups.length - 1) * gap;
-    const bw = Math.min(70, avail / k - 10), step = bw + 10, total = k * step + (groups.length - 1) * gap - 10;
-    let x = area.left + 14 + Math.max(0, ((area.right - area.left - 28) - total) / 2);
-    groups.forEach(g => {
-      const gx0 = x;
-      g.bars.forEach(b => {
-        const top = yPx(b.value), h = Math.max(base - top, 2), cx = x + bw / 2, good = better(b.value), small = b.n < (model.small_n || 100);
-        ctx.fillStyle = good ? '#15803d' : '#b91c1c'; ctx.fillRect(x, top, bw, h);
-        if(small){
-          ctx.save(); ctx.beginPath(); ctx.rect(x, top, bw, h); ctx.clip();
-          ctx.strokeStyle = 'rgba(255,255,255,0.38)'; ctx.lineWidth = 2;
-          for(let d = -h; d < bw + h; d += 7){ ctx.beginPath(); ctx.moveTo(x + d, top + h); ctx.lineTo(x + d + h, top); ctx.stroke(); }
-          ctx.restore();
-        }
-        ctx.font = '600 12px ' + FONT;
-        const tw = ctx.measureText(b.name).width || b.name.length * 7.2, need = tw + 22, inside = h >= need;
-        ctx.save(); ctx.font = '600 12px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        const ny = inside ? base - 9 : top - 7;
-        ctx.translate(cx, ny); ctx.rotate(-Math.PI / 2);
-        if(inside){ ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = good ? '#14532d' : '#7f1d1d'; ctx.strokeText(b.name, 0, 0); }
-        ctx.fillStyle = inside ? '#ffffff' : '#1A3540'; ctx.fillText(b.name, 0, 0); ctx.restore();
-        const vy = inside ? top - 7 : top - 7 - tw - 8;
-        ctx.save(); ctx.font = '600 12px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-        ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.strokeText(fmt(b.value), cx, vy);   // halo: the dashed average line never strikes through a value
-        ctx.fillStyle = '#0D2B35'; ctx.fillText(fmt(b.value), cx, vy); ctx.restore();
-        ctx.save(); ctx.font = (small ? '600 ' : '400 ') + '11px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = small ? '#b45309' : '#5A8090';
-        ctx.fillText('n=' + b.n.toLocaleString('en-US'), cx, base + 16); ctx.restore();
-        items.push({t: 'bar', name: b.name, value: b.value, n: b.n, good, small, inside, x, top, w: bw, h, label: fmt(b.value)});
-        x += step;
-      });
-      if(groups.length > 1){
-        const gx1 = x - 10;
-        ctx.save(); ctx.strokeStyle = '#b8d0d8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(gx0, base + 28); ctx.lineTo(gx1, base + 28); ctx.stroke();
-        ctx.font = '400 12px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#5A8090'; ctx.fillText(g.name, (gx0 + gx1) / 2, base + 45); ctx.restore();
-        items.push({t: 'group', text: g.name});
-      }
-      x += gap;
-    });
-  }
-  ctx.restore();
-  return items;
-}
-const csTowerPlugin = {
-  id: 'csTower',
-  afterDatasetsDraw(chart, args, opts){
-    const model = opts && opts.model;
-    if(!model || !chart.chartArea) return;
-    csTowerDraw(chart.ctx, chart.chartArea, v => chart.scales.y.getPixelForValue(v), model);
-  }
-};
-Chart.register(csTowerPlugin);
-
-function csTowerFillLines(which){
-  const t = CS_TW[which], sel = document.getElementById(t.sel); if(!sel) return;
-  const src = document.getElementById('cs-product-line');
-  let names = src ? [...src.options].map(o => o.value).filter(Boolean) : [];
-  if(!names.length) names = ['Identity CR', 'Identity PS'];
-  names = names.filter(n => !/^Excluded/i.test(n));
-  const keep = sel.value;
-  sel.innerHTML = names.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
-  sel.value = names.includes(keep) ? keep : (names.includes('Identity CR') ? 'Identity CR' : names[0]);
-}
-function csTowerSyncUI(which){
-  const t = CS_TW[which], inTower = t.view !== 'trend';
-  document.querySelectorAll('#' + t.grp + ' [data-v]').forEach(b => b.classList.toggle('active', b.getAttribute('data-v') === t.view));
-  t.hide.forEach(id => { const e = document.getElementById(id); if(e) e.style.display = inTower ? 'none' : ''; });
-  const sel = document.getElementById(t.sel);
-  if(sel){ if(t.view === 'categories'){ csTowerFillLines(which); sel.style.display = 'inline-block'; } else sel.style.display = 'none'; }
-  csSegPaintTitles();
-}
-function csTowerUrl(which){
-  const t = CS_TW[which];
-  const p = new URLSearchParams(csParams('monthly')); p.delete('granularity');
-  const w = csLtWindow();                                         // the selected dates, or the last 6 months when none are chosen: the same period the trend shows
-  p.set('date_from', csIso(w.selFrom)); p.set('date_to', csIso(w.selTo));
-  p.set('metric', t.metric); p.set('view', t.view);
-  if(t.view === 'categories'){ p.set('product', document.getElementById(t.sel).value); p.delete('product_group'); }
-  return API + '/analytics/camstar/compare?' + p.toString();
-}
-function csTowerClear(which){
-  const t = CS_TW[which];
-  if(t.inst){ try{ t.inst.destroy(); }catch(e){} t.inst = null; }
-  if(which === 'lt') window._csLtInst = null;
-}
-async function csTowerLoad(which){
-  const t = CS_TW[which], my = ++t.token;
-  const empty = document.getElementById(t.empty); if(empty) empty.style.display = 'none';
-  const wrap = document.getElementById(t.wrap); wrap.style.display = 'block';
-  const st = document.getElementById(t.status); if(st) st.textContent = 'loading…';
-  try{
-    await csBundleSettled(which);                                 // the preload may still be running
-    if(my !== t.token) return;                                    // the user changed their mind while this was loading
-    let d = null;
-    const bd = CS_BUNDLE[which].data;                             // the preloaded answer, if there is one
-    if(bd && bd.tower) d = t.view === 'lines' ? bd.tower.lines : (bd.tower.categories[document.getElementById(t.sel).value] || null);
-    if(!d){                                                       // no preload (or this product line is not in it): ask the server for just this view
-      const r = await fetch(csTowerUrl(which));
-      const j = await r.json();
-      if(my !== t.token) return;
-      if(!r.ok || j.error){ if(st) st.textContent = ''; csTowerClear(which); wrap.innerHTML = '<div class="chart-empty"><p>' + esc(j.error || 'Could not load this view') + '</p></div>'; return; }
-      d = j;
-    }
-    if(st) st.textContent = '';
-    t.data = d; csTowerRender(which);
-  }catch(e){
-    if(my !== t.token) return;
-    if(st) st.textContent = '';
-    csTowerClear(which); wrap.innerHTML = '<div class="chart-empty"><p>Could not load this view</p></div>'; toast('Could not load the ' + t.what + ' breakdown', 'err');
-  }
-}
-function csTowerRender(which){
-  const t = CS_TW[which], d = t.data; if(!d) return;
-  const wrap = document.getElementById(t.wrap), cap = document.getElementById(t.cap);
-  csTowerClear(which);
-  if(which === 'lt') csLtPriorFlags = null; else csOtdTrPriorFlags = null;
-  if(cap){ if(t.capOrig === null) t.capOrig = cap.textContent; }
-  const bars = d.groups.reduce((a, g) => a + g.bars.length, 0);
-  if(!d.average || !d.average.n || d.average.value == null){
-    wrap.innerHTML = '<div class="chart-empty"><p>No ' + t.what + ' data for this selection</p></div>'; if(cap) cap.textContent = ''; return;
-  }
-  if(!bars){
-    wrap.innerHTML = '<div class="chart-empty"><p>No categories apply to ' + esc(d.scope || 'this product line') + '. MA, KA and Dragon apply to Identity CR; Porous and Cemented wherever fixation is recorded.</p></div>';
-    if(cap) cap.textContent = 'Average ' + (d.unit === '%' ? d.average.value.toFixed(1) + '%' : d.average.value.toFixed(1) + ' days') + ' over ' + d.average.n.toLocaleString('en-US') + ' orders.'; return;
-  }
-  wrap.innerHTML = '<canvas id="' + t.canvas + '"></canvas>';
-  const allVals = [d.average.value].concat(d.groups.reduce((a, g) => a.concat(g.bars.map(b => b.value)), []));
-  const max = d.unit === '%' ? 100 : csNiceMax(Math.max.apply(null, allVals) * 1.2);
-  const unit = d.unit === '%' ? '%' : ' d';
-  t.inst = new Chart(document.getElementById(t.canvas).getContext('2d'), {
-    type: 'bar',
-    data: {labels: ['Average'], datasets: [{data: [d.average.value], backgroundColor: 'rgba(0,95,114,0.13)', borderColor: '#005F72', borderWidth: 1.5,
-                                           barPercentage: 1, categoryPercentage: 1, datalabels: {display: false}}]},
-    options: {responsive: true, maintainAspectRatio: false, animation: false, layout: {padding: {top: 30, right: 110, bottom: 58}},
-      plugins: {legend: {display: false}, tooltip: {enabled: false}, datalabels: {display: false}, csTower: {model: d}},
-      scales: {x: {display: false}, y: {min: 0, max, ticks: {callback: v => v + unit, font: {size: 11}}, grid: {color: '#e5e7eb'}}}}
-  });
-  if(which === 'lt') window._csLtInst = t.inst;
-  if(cap){
-    const m = d.metric === 'otd' ? 'on-time delivery' : 'average lead time';
-    cap.textContent = 'The shaded bar is the overall ' + m + ' (' + (d.unit === '%' ? d.average.value.toFixed(1) + '%' : d.average.value.toFixed(1) + ' days') + ', ' + d.average.n.toLocaleString('en-US') + ' orders); its top edge is the dashed line. '
-      + 'Each slim bar is that ' + (d.view === 'lines' ? 'product line' : 'category') + '\'s own figure, so a bar above the line pulls the average ' + (d.metric === 'otd' ? 'up' : 'up (slower)') + ' and one below pulls it down. '
-      + (d.view === 'categories' ? 'The groups describe different things and overlap, so they are not meant to add up. ' : '')
-      + 'Hatched bars have fewer than ' + (d.small_n || 100) + ' orders: read them with care.'
-      + (d.left_out && d.left_out.length ? ' Left out: ' + d.left_out.join(', ') + '.' : '');
-  }
-}
-async function csTowerSetView(which, view){
-  const t = CS_TW[which]; if(t.view === view) return;
-  t.view = view; t.token++;
-  csTowerSyncUI(which);
-  if(view === 'trend'){
-    csTowerClear(which);
-    const wrap = document.getElementById(t.wrap), cap = document.getElementById(t.cap);
-    if(cap && t.capOrig !== null) cap.textContent = t.capOrig;
-    if(!t.gen) return;                                            // nothing generated yet
-    wrap.innerHTML = '';
-    if(!t.trendLoaded){ t.trendLoaded = true; await (which === 'lt' ? csOrigLoadCsLtByStep() : csOrigLoadCsOtdTrend()); }
-    else if(which === 'lt') renderCsLtChart(); else renderCsOtdTrend();
-    return;
-  }
-  if(!t.gen) return;                                              // the next Generate draws it
-  await csTowerLoad(which);
-}
-function csTowerLineChange(which){
-  csSegPaintTitles();
-  if(CS_TW[which].gen && CS_TW[which].view === 'categories') csTowerLoad(which);
-}
-// ---- Preload: everything the Lead Time / OTD charts can switch between, fetched ONCE per Generate ----
-// The first chart draws exactly as before. In the background ONE request per metric brings back every period (weekly and
-// monthly), every segment, the By product line view and the By category view of every product line, and (OTD) the donut's totals.
-// They are dropped into the caches the charts already read, so every later switch is instant. If the preload fails, nothing
-// breaks: each action simply asks the server for what it needs, as it always did.
-const CS_BUNDLE = {
-  lt:  {gen: 0, state: 'idle', promise: null, data: null, initial: false, st: 'csLtBundleSt'},
-  otd: {gen: 0, state: 'idle', promise: null, data: null, initial: false, st: 'csOtdTrBundleSt', sig: ''}
-};
-const csOtdDonutCache = {};          // "filters|segment" -> the totals the donut would have asked the server for
-function csFilterSig(){ const p = new URLSearchParams(csParams('monthly')); p.delete('granularity'); return p.toString(); }
-function csBundleStatus(metric, msg, fade){
-  const el = document.getElementById(CS_BUNDLE[metric].st); if(!el) return;
-  el.textContent = msg || '';
-  if(fade) setTimeout(() => { if(el.textContent === msg) el.textContent = ''; }, 4000);
-}
-function csBundleUrl(metric){
-  const p = new URLSearchParams(csParams('monthly')); p.delete('granularity');     // the page's filters (and, for the donut, its dates)
-  const buckets = [];
-  ['monthly', 'weekly'].forEach(g => csLtBuckets(g).forEach(b => buckets.push(b.from + '_' + b.to)));
-  p.set('metric', metric); p.set('buckets', [...new Set(buckets)].join(','));
-  const w = csLtWindow(); p.set('tower_from', csIso(w.selFrom)); p.set('tower_to', csIso(w.selTo));
-  return API + '/analytics/camstar/bundle?' + p.toString();
-}
-function csBundleApply(metric, d){
-  // d.combos lists all 27 dropdown combinations (as the query-string suffix the page uses for its cache keys); the preload
-  // leaves out the ones with no orders, so those are filled in as empty here.
-  const empty = metric === 'lt' ? {steps: []} : {total_cases: 0, total_yes: 0, team_otd: 0};
-  Object.keys(d.trend || {}).forEach(k => (d.combos || []).forEach(combo => {
-    const key = k + combo, e = d.trend[k][combo] || empty;
-    if(metric === 'lt'){ if(csLtCache[key] === undefined) csLtCache[key] = e; }
-    else if(csOtdTrCache[key] === undefined) csOtdTrCache[key] = e;
-  }));
-  if(metric === 'otd' && d.donut) Object.keys(d.donut).forEach(combo => { csOtdDonutCache[CS_BUNDLE.otd.sig + '|' + combo] = d.donut[combo]; });
-}
-async function csBundleSettled(metric){
-  const b = CS_BUNDLE[metric];
-  if(b.state === 'loading' && b.promise){ try{ await b.promise; }catch(e){} }
-}
-function csBundleStart(metric){
-  const b = CS_BUNDLE[metric], gen = ++b.gen;
-  b.state = 'loading'; b.data = null; if(metric === 'otd') b.sig = csFilterSig();
-  csBundleStatus(metric, 'preparing all views…');
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 85000);
-  b.promise = (async () => {
-    try{
-      const r = await fetch(csBundleUrl(metric), {signal: ctl.signal});
-      const d = await r.json();
-      if(gen !== b.gen) return null;                              // a newer Generate replaced this one
-      if(!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
-      b.data = d; b.state = 'ready'; csBundleApply(metric, d);
-      csBundleStatus(metric, 'all views ready', true);
-      return d;
-    }catch(e){
-      if(gen !== b.gen) return null;
-      b.state = 'failed'; csBundleStatus(metric, 'switching will load on demand', true);
-      return null;
-    }finally{ clearTimeout(timer); }
-  })();
-  return b.promise;
-}
-// Whatever asks for periods (first load, Weekly/Monthly, previous 3 months, a segment) first fills the caches from the preload.
-// During the very first load it does not wait (so the first chart is as fast as ever); a later user action waits for a preload still running.
-const csOrigLtEnsure = csLtEnsure;
-csLtEnsure = async function(){
-  const b = CS_BUNDLE.lt;
-  if(b.state === 'loading' && !b.initial) await csBundleSettled('lt');
-  if(b.state === 'ready' && b.data) csBundleApply('lt', b.data);
-  return csOrigLtEnsure.apply(this, arguments);
-};
-const csOrigOtdTrEnsure = csOtdTrEnsure;
-csOtdTrEnsure = async function(){
-  const b = CS_BUNDLE.otd;
-  if(b.state === 'loading' && !b.initial) await csBundleSettled('otd');
-  if(b.state === 'ready' && b.data) csBundleApply('otd', b.data);
-  return csOrigOtdTrEnsure.apply(this, arguments);
-};
-
-// Generate (and the original renderers) go through these wrappers: in a tower view they draw the tower; otherwise nothing changes.
-const csOrigLoadCsLtByStep = loadCsLtByStep;
-loadCsLtByStep = async function(){
-  const t = CS_TW.lt, b = CS_BUNDLE.lt; t.gen = true; t.trendLoaded = false; csLtCache = {};
-  if(t.view === 'trend'){
-    t.trendLoaded = true; b.initial = true;
-    const p = csOrigLoadCsLtByStep.apply(this, arguments);       // the first chart: exactly as before
-    csBundleStart('lt');                                          // ...and everything else, in the background
-    try{ return await p; }finally{ b.initial = false; }
-  }
-  csBundleStart('lt');
-  return csTowerLoad('lt');
-};
-const csOrigLoadCsOtdTrend = loadCsOtdTrend;
-loadCsOtdTrend = async function(){
-  const t = CS_TW.otd, b = CS_BUNDLE.otd; t.gen = true; t.trendLoaded = false; csOtdTrCache = {};
-  if(t.view === 'trend'){
-    t.trendLoaded = true; b.initial = true;
-    const p = csOrigLoadCsOtdTrend.apply(this, arguments);
-    csBundleStart('otd');
-    try{ return await p; }finally{ b.initial = false; }
-  }
-  csBundleStart('otd');
-  return csTowerLoad('otd');
-};
-const csOrigRenderCsLtChart = renderCsLtChart;
-renderCsLtChart = function(){ if(CS_TW.lt.view !== 'trend'){ if(CS_TW.lt.data) csTowerRender('lt'); return; } return csOrigRenderCsLtChart.apply(this, arguments); };
-const csOrigRenderCsOtdTrend = renderCsOtdTrend;
-renderCsOtdTrend = function(){ if(CS_TW.otd.view !== 'trend'){ if(CS_TW.otd.data) csTowerRender('otd'); return; } return csOrigRenderCsOtdTrend.apply(this, arguments); };
-
-// Copy images carry the segment / view in their title (the dropdowns themselves are not part of the copied picture).
-const csOrigCopyRptChart = copyRptChart;
-copyRptChart = function(canvasId, label, e){
-  if(canvasId === 'csOtdChart') label += csSegTitle('csOtd');
-  else if(canvasId === 'csLtChart') label += CS_TW.lt.view !== 'trend' ? csTowerTag('lt') : csSegTitle('csLt');
-  return csOrigCopyRptChart.call(this, canvasId, label, e);
-};
-const csOrigCopyRptCardEl = copyRptCardEl;
-copyRptCardEl = function(btn, label, cardId){
-  if(cardId === 'csOtdTrendCard') label += CS_TW.otd.view !== 'trend' ? csTowerTag('otd') : csSegTitle('csOtd');
-  return csOrigCopyRptCardEl.call(this, btn, label, cardId);
-};
-
 async function loadCsSteps(){
   const btn=document.getElementById('csLoadStepsBtn');
   btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin"></i>';
@@ -2757,12 +2383,12 @@ function csLtBuckets(gran){
 // fetch the buckets that are not cached yet (4 requests at a time). Monthly always includes the previous months; weekly only when they are shown.
 async function csLtEnsure(gran){
   const ctx=csLtCtx; if(!ctx)return;
-  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csLtShowPrev||b.selected); const segQs=csSegmentQs('csLt');
+  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csLtShowPrev||b.selected);
   const tasks=[]; let total=0, done=0, failed=0;
-  need.forEach(b=>{const key=`${b.from}|${b.to}${segQs}`; if(csLtCache[key]!==undefined)return; total++;
+  need.forEach(b=>{const key=`${b.from}|${b.to}`; if(csLtCache[key]!==undefined)return; total++;
     tasks.push(async()=>{
       try{const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),25000);
-        const r=await fetch(`${API}/analytics/camstar/lt-by-step?${csParams('monthly',{from:b.from,to:b.to})}${segQs}`,{signal:ctl.signal}); clearTimeout(to);
+        const r=await fetch(`${API}/analytics/camstar/lt-by-step?${csParams('monthly',{from:b.from,to:b.to})}`,{signal:ctl.signal}); clearTimeout(to);
         const j=r.ok?await r.json():null; csLtCache[key]=(j&&!j.error)?j:null; if(!csLtCache[key])failed++;
       }catch(e){csLtCache[key]=null;failed++;}
       done++; const st=document.getElementById('csLtStatus'); if(st)st.textContent=`loading lead time ${done}/${total}…`;
@@ -2771,7 +2397,7 @@ async function csLtEnsure(gran){
   const st=document.getElementById('csLtStatus'); if(st)st.textContent=failed?`${failed} of ${total} requests failed; those periods are left blank`:'';
 }
 function csLtBuild(gran){
-  const buckets=csLtBuckets(gran).filter(b=>csLtShowPrev||b.selected).map(b=>({...b,data:csLtCache[`${b.from}|${b.to}${csSegmentQs('csLt')}`]||null}));
+  const buckets=csLtBuckets(gran).filter(b=>csLtShowPrev||b.selected).map(b=>({...b,data:csLtCache[`${b.from}|${b.to}`]||null}));
   const fam=[], seen=new Set();
   buckets.forEach(b=>(b.data?.steps||[]).forEach(x=>{if(x.avg_days!=null&&!seen.has(x.process)){seen.add(x.process);fam.push(x.process);}}));
   const wk=CS_COUNT_KEYS.find(k=>buckets.some(b=>(b.data?.steps||[]).some(x=>typeof x[k]==='number'&&x[k]>0)))||null;
@@ -2881,6 +2507,87 @@ async function fetchCsForecast(granularity){
     const res = await fetch(`${API}/analytics/camstar/forecast?${params.toString()}`);
     return await res.json();
   } catch(e){ return null; }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  NCR RATE  =  NCR entries (Database_Index > NCRs, CAD Error = Yes, by Initiated Date)  /  cases completed, same date range.
+//  Families: ankle = product line PSR, shoulder = Shoulder, knee = every other line except Hip. Hip has no NCR rule.
+// ══════════════════════════════════════════════════════════════
+const NCR_FAMILY_NAMES={ankle:'Ankle',shoulder:'Shoulder',knee:'Knee'};
+function ncrFamilyOfName(n){
+  const t=String(n||'').toLowerCase();
+  if(/ankle|\bpsr\b/.test(t))return 'ankle';
+  if(/shoulder|\btsa\b|rtsa|glenoid|humer/.test(t))return 'shoulder';
+  if(/knee|\btka\b|patell/.test(t))return 'knee';
+  if(/\bhip\b|acetab/.test(t))return 'hip';
+  return null;
+}
+function ncrShowRate(valId,subId,count,cases,label){
+  const v=document.getElementById(valId), sb=document.getElementById(subId); if(!v||!sb)return;
+  if(!(cases>0)){v.textContent='—';sb.textContent=`no completed cases · ${label}`;return;}
+  v.textContent=(count/cases*100).toFixed(1)+'%';
+  sb.textContent=`${count} NCR${count===1?'':'s'} / ${cases} cases · ${label}`;
+}
+function ncrShowMessage(valId,subId,value,sub,title){
+  const v=document.getElementById(valId), sb=document.getElementById(subId); if(!v||!sb)return;
+  v.textContent=value; sb.textContent=sub; sb.title=title||'';
+}
+async function ncrFetchCount(fams,from,to){
+  const q=new URLSearchParams({family:fams.join(',')}); if(from)q.set('date_from',from); if(to)q.set('date_to',to);
+  const r=await fetch(`${API}/analytics/ncr-count?${q.toString()}`); if(!r.ok)throw new Error('NCR list answered '+r.status);
+  return (await r.json()).count;
+}
+// R3ID: the product / product group picked in the filter bar decides the family; the denominator is the same Case Volume number
+// (cases with an effective PSP date in range) but for ALL case types and without the user / surgeon / facility filters.
+let rptNcrRun=0;
+function rptNcrSelection(){
+  const picks=SEL.rptProductName.length?SEL.rptProductName:SEL.rptProductGroup;
+  if(!picks.length)return{fams:['ankle','shoulder','knee'],label:'all products',unknown:false};
+  const fams=new Set(); let hip=false, unknown=false;
+  picks.forEach(n=>{const f=ncrFamilyOfName(n); if(f==='hip')hip=true; else if(f)fams.add(f); else unknown=true;});
+  const list=['ankle','shoulder','knee'].filter(f=>fams.has(f));
+  return{fams:list,label:list.map(f=>NCR_FAMILY_NAMES[f]).join(' + '),hip,unknown};
+}
+function rptNcrQS(){
+  const params=new URLSearchParams();
+  if(!rptIsAllTime){
+    const from=document.getElementById('rptDateFrom').value||rptDateFrom, to=document.getElementById('rptDateTo').value||rptDateTo;
+    if(from)params.append('date_from',from); if(to)params.append('date_to',to);
+  }
+  if(SEL.rptProductName.length)params.append('product',SEL.rptProductName.join(','));
+  else if(SEL.rptProductGroup.length)params.append('product_group',SEL.rptProductGroup.join(','));
+  return params;
+}
+async function loadRptNcrRate(){
+  const run=++rptNcrRun, sel=rptNcrSelection();
+  if(!sel.fams.length){ncrShowMessage('rptKpiNcr','rptKpiNcrSub','n/a',sel.hip?'not defined for Hip':'pick an ankle, shoulder or knee product','');return;}
+  ncrShowMessage('rptKpiNcr','rptKpiNcrSub','…','loading','');
+  try{
+    const params=rptNcrQS(), from=params.get('date_from'), to=params.get('date_to');
+    const [ncr,volRes]=await Promise.all([ncrFetchCount(sel.fams,from,to),fetch(`${API}/analytics/report/volume?${params.toString()}`)]);
+    if(!volRes.ok)throw new Error('case volume answered '+volRes.status);
+    const cases=(await volRes.json()).case_count;
+    if(run!==rptNcrRun)return;                                  // a newer Generate is already running
+    ncrShowRate('rptKpiNcr','rptKpiNcrSub',ncr,cases,sel.label);
+    const sb=document.getElementById('rptKpiNcrSub'); if(sb)sb.title=sel.unknown?'Some selected products could not be matched to ankle / shoulder / knee and are not included in the NCR count.':'';
+  }catch(e){ if(run===rptNcrRun)ncrShowMessage('rptKpiNcr','rptKpiNcrSub','—','NCR list unavailable',String(e&&e.message||e)); }
+}
+// Camstar: knee only (Cleared Knee group). The denominator is Camstar's completed volume for that group and range.
+let csNcrRun=0, csNcrKey=null;
+async function loadCsNcrRate(){
+  const group=document.getElementById('cs-product-group')?.value||'', line=document.getElementById('cs-product-line')?.value||'';
+  const from=document.getElementById('cs-date-from')?.value||'', to=document.getElementById('cs-date-to')?.value||'';
+  if(/hip/i.test(group)||/^hip$/i.test(line)){csNcrKey=null;ncrShowMessage('cs-ncr-rate','cs-ncr-sub','n/a','not defined for Hip','');return;}
+  const key=`${from}|${to}`; if(key===csNcrKey&&document.getElementById('cs-ncr-rate')?.textContent.endsWith('%'))return;    // same range: keep what is shown
+  const run=++csNcrRun; ncrShowMessage('cs-ncr-rate','cs-ncr-sub','…','loading','');
+  try{
+    const q=new URLSearchParams({granularity:'monthly',product_group:'Cleared Knee'}); if(from)q.set('date_from',from); if(to)q.set('date_to',to);
+    const [ncr,volRes]=await Promise.all([ncrFetchCount(['knee'],from,to),fetch(`${API}/analytics/camstar/volume?${q.toString()}`)]);
+    if(!volRes.ok)throw new Error('Camstar volume answered '+volRes.status);
+    const cases=(await volRes.json()).total_volume;
+    if(run!==csNcrRun)return;
+    csNcrKey=key; ncrShowRate('cs-ncr-rate','cs-ncr-sub',ncr,cases,'Knee');
+  }catch(e){ if(run===csNcrRun){csNcrKey=null;ncrShowMessage('cs-ncr-rate','cs-ncr-sub','—','NCR list unavailable',String(e&&e.message||e));} }
 }
 
 let csVolLastData=null, csVolLastSubData=null, csVolLastForecast=null;
@@ -3001,6 +2708,7 @@ async function loadCamstarVolume(){
   document.getElementById('cs-vol-total').innerHTML='<span class="dot-spinner"><span></span><span></span><span></span></span>';
   const el=document.getElementById('csVolEmpty');if(el)el.style.display='none';
   document.getElementById('csVolWrap').style.display='block';
+  loadCsNcrRate();
   try{
     const qs = csParams(csGranularity);
     const fromVal=document.getElementById('cs-date-from')?.value;
@@ -3357,12 +3065,12 @@ async function loadCsOtd(){
   const el = document.getElementById('csOtdEmpty'); if(el) el.style.display='none';
   document.getElementById('csOtdWrap').style.display='block';
   try{
-    const qs = csParams(csOtdGranularity_) + csSegmentQs('csOtd');
-    const pre = csOtdDonutCache[csFilterSig() + '|' + csSegmentQs('csOtd')];   // preloaded with the report
-    const data = pre || await (await fetch(`${API}/analytics/camstar/otd?${qs}`)).json();
+    const qs = csParams(csOtdGranularity_);
+    const res = await fetch(`${API}/analytics/camstar/otd?${qs}`);
+    const data = await res.json();
     if(data.error){toast('OTD error: '+data.error,'err');document.getElementById('cs-otd-avg').textContent='Error';return;}
     document.getElementById('cs-otd-avg').textContent = data.team_otd+'%';
-    document.getElementById('cs-otd-sub').textContent = `${data.total_yes}/${data.total_cases} on time · ${csOtdGranularity_}${data.segment ? ' · ' + data.segment : ''}`;
+    document.getElementById('cs-otd-sub').textContent = `${data.total_yes}/${data.total_cases} on time · ${csOtdGranularity_}`;
     window._csOtdLastData = data;
     renderCsOtdChart(data);
   }catch(e){toast('CamStar OTD error','err');}
@@ -3401,12 +3109,12 @@ function csOtdTrSyncToggles(){
 }
 async function csOtdTrEnsure(gran){
   if(!csOtdTrCtx)return;
-  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csOtdTrShowPrev||b.selected); const segQs=csSegmentQs('csOtd');
+  const need=csLtBuckets(gran).filter(b=>gran==='monthly'||csOtdTrShowPrev||b.selected);
   const tasks=[]; let total=0, done=0, failed=0;
-  need.forEach(b=>{const key=`${b.from}|${b.to}${segQs}`; if(csOtdTrCache[key]!==undefined)return; total++;
+  need.forEach(b=>{const key=`${b.from}|${b.to}`; if(csOtdTrCache[key]!==undefined)return; total++;
     tasks.push(async()=>{
       try{const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),25000);
-        const r=await fetch(`${API}/analytics/camstar/otd?${csParams('monthly',{from:b.from,to:b.to})}${segQs}`,{signal:ctl.signal}); clearTimeout(to);
+        const r=await fetch(`${API}/analytics/camstar/otd?${csParams('monthly',{from:b.from,to:b.to})}`,{signal:ctl.signal}); clearTimeout(to);
         const j=r.ok?await r.json():null; csOtdTrCache[key]=(j&&!j.error)?j:null; if(!csOtdTrCache[key])failed++;
       }catch(e){csOtdTrCache[key]=null;failed++;}
       done++; const st=document.getElementById('csOtdTrStatus'); if(st)st.textContent=`loading on-time trend ${done}/${total}…`;
@@ -3416,7 +3124,7 @@ async function csOtdTrEnsure(gran){
 }
 function csOtdTrBuild(gran){
   return csLtBuckets(gran).filter(b=>csOtdTrShowPrev||b.selected).map(b=>{
-    const d=csOtdTrCache[`${b.from}|${b.to}${csSegmentQs('csOtd')}`]||null, tot=Number(d?.total_cases)||0, yes=Number(d?.total_yes)||0;
+    const d=csOtdTrCache[`${b.from}|${b.to}`]||null, tot=Number(d?.total_cases)||0, yes=Number(d?.total_yes)||0;
     return{label:b.label,selected:b.selected,yes,total:tot,pct:tot>0?yes/tot*100:null};
   });
 }
@@ -6343,6 +6051,7 @@ async function generateReport(){
       fetch(`${API}/analytics/kpi/surgeon?${qs}`).catch(()=>null),
     ]);
     tick('KPIs loaded');
+    loadRptNcrRate();                                  // NCR rate tile (own requests, never blocks the report)
 
     let digitalLt=0;
     if(volRes?.ok){const d=await volRes.json();document.getElementById('rptKpiVolume').textContent=d.case_count??'—';}
